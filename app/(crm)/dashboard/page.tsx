@@ -1,10 +1,132 @@
+'use client'
+import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
-import KpiCard from '@/components/ui/KpiCard'
-import { PerformanceLineChart, ChannelBarChart, BudgetDonutChart, FunnelViz } from '@/components/charts/Charts'
-import { kpiSummary, funnelData, channelPerformance } from '@/lib/mock-data'
-import { Users, Target, DollarSign, TrendingUp, Zap, BarChart2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Users, Target, DollarSign, TrendingUp, Zap, CheckSquare, Loader2 } from 'lucide-react'
+
+type Contact = {
+  id: string
+  utm_source: string | null
+  utm_medium: string | null
+  status: string | null
+  campaign_name: string | null
+  created_at: string
+}
+
+type Deal = {
+  id: string
+  stage: string
+  value: number
+}
+
+type Task = {
+  id: string
+  due_date: string | null
+  done: boolean
+}
+
+type Campaign = {
+  id: string
+  status: string
+  budget: number | null
+  spend: number | null
+}
+
+const STAGE_ORDER = ['New Lead', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost']
+
+const stageColor: Record<string, string> = {
+  'New Lead': 'bg-sky-500',
+  'Contacted': 'bg-indigo-500',
+  'Qualified': 'bg-violet-500',
+  'Proposal Sent': 'bg-amber-500',
+  'Won': 'bg-emerald-500',
+  'Lost': 'bg-red-400',
+}
+
+const channelColor: Record<string, string> = {
+  Meta: '#6366f1', Google: '#0ea5e9', TikTok: '#f43f5e',
+  LinkedIn: '#3b82f6', Organic: '#10b981', Email: '#f59e0b', Other: '#94a3b8',
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function isOverdue(due: string | null) {
+  if (!due) return false
+  return due < today()
+}
 
 export default function DashboardPage() {
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [deals, setDeals] = useState<Deal[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const [c, d, t, ca] = await Promise.all([
+        supabase.from('users').select('id,utm_source,utm_medium,status,campaign_name,created_at'),
+        supabase.from('pipeline_deals').select('id,stage,value'),
+        supabase.from('tasks').select('id,due_date,done'),
+        supabase.from('campaigns').select('id,status,budget,spend'),
+      ])
+      setContacts(c.data ?? [])
+      setDeals(d.data ?? [])
+      setTasks(t.data ?? [])
+      setCampaigns(ca.data ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  // KPIs
+  const totalLeads = contacts.length
+  const activeCampaigns = campaigns.filter(c => c.status === 'Active').length
+  const totalBudget = campaigns.reduce((s, c) => s + (c.budget ?? 0), 0)
+  const totalSpend = campaigns.reduce((s, c) => s + (c.spend ?? 0), 0)
+  const budgetUsed = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : 0
+  const wonDeals = deals.filter(d => d.stage === 'Won')
+  const wonValue = wonDeals.reduce((s, d) => s + d.value, 0)
+  const pipelineValue = deals.filter(d => !['Won', 'Lost'].includes(d.stage)).reduce((s, d) => s + d.value, 0)
+  const winRate = deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0
+  const tasksDueToday = tasks.filter(t => t.due_date === today() && !t.done).length
+  const overdueCount = tasks.filter(t => isOverdue(t.due_date) && !t.done).length
+
+  // Channel breakdown from contacts
+  const channelMap: Record<string, number> = {}
+  contacts.forEach(c => {
+    const ch = c.utm_source ?? 'Organic'
+    channelMap[ch] = (channelMap[ch] ?? 0) + 1
+  })
+  const channels = Object.entries(channelMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+  const maxLeads = Math.max(...channels.map(([, n]) => n), 1)
+
+  // Pipeline funnel
+  const stageCount = STAGE_ORDER.map(stage => ({
+    stage,
+    count: deals.filter(d => d.stage === stage).length,
+    value: deals.filter(d => d.stage === stage).reduce((s, d) => s + d.value, 0),
+  }))
+  const maxCount = Math.max(...stageCount.map(s => s.count), 1)
+
+  // Recent contacts (last 5)
+  const recentContacts = [...contacts]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5)
+
+  const kpis = [
+    { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50', sub: `${activeCampaigns} active campaigns` },
+    { label: 'Pipeline Value', value: `$${pipelineValue.toLocaleString()}`, icon: DollarSign, color: 'text-indigo-600', bg: 'bg-indigo-50', sub: `${deals.filter(d => !['Won','Lost'].includes(d.stage)).length} active deals` },
+    { label: 'Won Revenue', value: `$${wonValue.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50', sub: `${winRate}% win rate` },
+    { label: 'Active Campaigns', value: activeCampaigns, icon: Zap, color: 'text-violet-600', bg: 'bg-violet-50', sub: `${budgetUsed}% budget used` },
+    { label: 'Tasks Due Today', value: tasksDueToday, icon: CheckSquare, color: 'text-amber-600', bg: 'bg-amber-50', sub: overdueCount > 0 ? `${overdueCount} overdue` : 'No overdue tasks' },
+    { label: 'Win Rate', value: `${winRate}%`, icon: Target, color: 'text-rose-600', bg: 'bg-rose-50', sub: `${wonDeals.length} of ${deals.length} deals won` },
+  ]
+
   return (
     <div>
       <Header title="Dashboard" subtitle="Performance overview — AgentsPilot CRM" />
@@ -12,142 +134,171 @@ export default function DashboardPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          <KpiCard
-            title="CR Rate"
-            value={`${kpiSummary.avgCR}%`}
-            change={12.4}
-            changeLabel="vs last period"
-            icon={Target}
-            iconColor="text-indigo-600"
-            iconBg="bg-indigo-50"
-          />
-          <KpiCard
-            title="CPL"
-            value={`$${kpiSummary.avgCPL}`}
-            change={-8.2}
-            changeLabel="vs last period"
-            icon={DollarSign}
-            iconColor="text-amber-600"
-            iconBg="bg-amber-50"
-          />
-          <KpiCard
-            title="Total Leads"
-            value={kpiSummary.totalLeads}
-            change={18.6}
-            changeLabel="vs last period"
-            icon={Users}
-            iconColor="text-sky-600"
-            iconBg="bg-sky-50"
-          />
-          <KpiCard
-            title="Budget Used"
-            value={`${kpiSummary.budgetUsed}%`}
-            change={-3.1}
-            changeLabel="under budget"
-            icon={BarChart2}
-            iconColor="text-violet-600"
-            iconBg="bg-violet-50"
-          />
-          <KpiCard
-            title="Revenue"
-            value="$966K"
-            change={22.1}
-            changeLabel="vs last period"
-            icon={TrendingUp}
-            iconColor="text-emerald-600"
-            iconBg="bg-emerald-50"
-          />
-          <KpiCard
-            title="Active Campaigns"
-            value={kpiSummary.activeCampaigns}
-            icon={Zap}
-            iconColor="text-rose-600"
-            iconBg="bg-rose-50"
-          />
-        </div>
-
-        {/* Performance Chart */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Performance Over Time</h2>
-              <p className="text-xs text-slate-500 mt-0.5">CR Rate & Leads — last 12 weeks</p>
+          {kpis.map(k => (
+            <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className={`h-9 w-9 rounded-lg ${k.bg} flex items-center justify-center mb-3`}>
+                <k.icon className={`h-4.5 w-4.5 ${k.color}`} />
+              </div>
+              <p className="text-xs text-slate-500">{k.label}</p>
+              <p className={`text-xl font-bold mt-0.5 ${k.color}`}>
+                {loading ? <span className="animate-pulse bg-gray-100 rounded h-6 w-12 inline-block" /> : k.value}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">{k.sub}</p>
             </div>
-            <select className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-slate-600 bg-gray-50">
-              <option>Last 12 weeks</option>
-              <option>Last 6 months</option>
-            </select>
-          </div>
-          <PerformanceLineChart />
+          ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Channel Performance */}
+
+          {/* Pipeline Funnel */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Performance by Channel</h2>
-            <p className="text-xs text-slate-500 mb-4">Leads & Conversions — all time</p>
-            <ChannelBarChart />
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Pipeline Funnel</h2>
+            <p className="text-xs text-slate-500 mb-4">Deals by stage — all time</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {stageCount.map(({ stage, count, value }) => (
+                  <div key={stage} className="flex items-center gap-3">
+                    <div className="w-28 text-xs text-slate-600 shrink-0">{stage}</div>
+                    <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${stageColor[stage]}`}
+                        style={{ width: `${Math.max((count / maxCount) * 100, count > 0 ? 4 : 0)}%` }}
+                      />
+                    </div>
+                    <div className="w-6 text-xs font-semibold text-slate-700 text-right">{count}</div>
+                    {value > 0 && (
+                      <div className="w-20 text-xs text-slate-400 text-right">${value.toLocaleString()}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Budget Allocation */}
+          {/* Leads by Channel */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Budget Allocation</h2>
-            <p className="text-xs text-slate-500 mb-4">Spend distribution by channel</p>
-            <BudgetDonutChart />
+            <h2 className="text-sm font-semibold text-slate-900 mb-1">Leads by Channel</h2>
+            <p className="text-xs text-slate-500 mb-4">Source attribution from UTM data</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+              </div>
+            ) : channels.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-10">No contact data yet</p>
+            ) : (
+              <div className="space-y-3">
+                {channels.map(([ch, count]) => (
+                  <div key={ch} className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 w-24 shrink-0">
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: channelColor[ch] ?? '#94a3b8' }} />
+                      <span className="text-xs text-slate-700 truncate">{ch}</span>
+                    </div>
+                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.max((count / maxLeads) * 100, 4)}%`,
+                          backgroundColor: channelColor[ch] ?? '#94a3b8',
+                          opacity: 0.75,
+                        }}
+                      />
+                    </div>
+                    <div className="w-8 text-xs font-semibold text-slate-700 text-right">{count}</div>
+                    <div className="w-10 text-xs text-slate-400 text-right">
+                      {Math.round((count / totalLeads) * 100)}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Funnel / Status by Level */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Status by Level</h2>
-            <p className="text-xs text-slate-500 mb-4">Conversion funnel — all channels</p>
-            <FunnelViz data={funnelData} />
-          </div>
 
-          {/* Channel stats table */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900 mb-4">Channel Breakdown</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="pb-2 text-left text-xs font-medium text-slate-500">Channel</th>
-                    <th className="pb-2 text-right text-xs font-medium text-slate-500">Leads</th>
-                    <th className="pb-2 text-right text-xs font-medium text-slate-500">CR%</th>
-                    <th className="pb-2 text-right text-xs font-medium text-slate-500">CPL</th>
-                    <th className="pb-2 text-right text-xs font-medium text-slate-500">Spend</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {channelPerformance.map((ch) => (
-                    <tr key={ch.channel} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-2.5">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ch.color }} />
-                          <span className="font-medium text-slate-800">{ch.channel}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 text-right text-slate-700">{ch.leads.toLocaleString()}</td>
-                      <td className="py-2.5 text-right">
-                        <span className={`font-semibold ${ch.cr >= 10 ? 'text-emerald-600' : ch.cr >= 7 ? 'text-indigo-600' : 'text-amber-600'}`}>
-                          {ch.cr}%
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-right text-slate-700">
-                        {ch.cpl === 0 ? <span className="text-emerald-600 font-medium">Free</span> : `$${ch.cpl}`}
-                      </td>
-                      <td className="py-2.5 text-right text-slate-700">
-                        {ch.spend === 0 ? '—' : `$${ch.spend.toLocaleString()}`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Recent Contacts */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Recent Contacts</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Last 5 leads added</p>
+              </div>
+              <a href="/contacts" className="text-xs text-indigo-600 hover:underline">View all →</a>
             </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+              </div>
+            ) : recentContacts.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-10">No contacts yet</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {recentContacts.map(c => (
+                  <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-700 truncate">{c.campaign_name ?? '—'}</p>
+                      <p className="text-xs text-slate-400">{c.utm_source ?? 'Organic'} · {new Date(c.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                      c.status === 'Customer' ? 'bg-emerald-100 text-emerald-700' :
+                      c.status === 'Qualified' ? 'bg-violet-100 text-violet-700' :
+                      c.status === 'Contacted' ? 'bg-indigo-100 text-indigo-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>{c.status ?? 'New'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
 
+          {/* Campaign Summary */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Campaigns</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Budget & spend overview</p>
+              </div>
+              <a href="/campaigns" className="text-xs text-indigo-600 hover:underline">View all →</a>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+              </div>
+            ) : campaigns.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-10">No campaigns yet</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {campaigns.map(c => {
+                  const pct = c.budget && c.budget > 0 ? Math.round(((c.spend ?? 0) / c.budget) * 100) : 0
+                  return (
+                    <div key={c.id} className="px-5 py-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          c.status === 'Active' ? 'bg-emerald-100 text-emerald-700' :
+                          c.status === 'Paused' ? 'bg-amber-100 text-amber-700' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>{c.status}</span>
+                        <span className="text-xs text-slate-500">${(c.spend ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${pct >= 90 ? 'bg-red-400' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">{pct}% used</p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
     </div>
   )
