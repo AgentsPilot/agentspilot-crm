@@ -1,0 +1,382 @@
+'use client'
+import { useEffect, useState } from 'react'
+import Header from '@/components/layout/Header'
+import Badge from '@/components/ui/Badge'
+import { supabase } from '@/lib/supabase'
+import { Search, Filter, Plus, X, Loader2, Link, ChevronDown, ChevronUp } from 'lucide-react'
+
+type User = {
+  id: string
+  full_name: string
+  email: string
+  phone: string | null
+  country: string | null
+  city: string | null
+  language: string | null
+  channel: string | null
+  campaign_name: string | null
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+  utm_content: string | null
+  utm_term: string | null
+  ad_id: string | null
+  status: 'lead' | 'active' | 'converted' | 'inactive'
+  funnel_level: 'Awareness' | 'Interest' | 'Consideration' | 'Intent' | 'Converted'
+  lead_score: number
+  created_at: string
+  converted_at: string | null
+  last_active_at: string
+  notes: string | null
+  tags: string[]
+}
+
+const statusVariant = { active: 'success', converted: 'indigo', lead: 'warning', inactive: 'neutral' } as const
+const levelVariant = { Awareness: 'neutral', Interest: 'info', Consideration: 'warning', Intent: 'indigo', Converted: 'success' } as const
+
+const emptyForm = {
+  full_name: '', email: '', phone: '', country: '', city: '', language: 'EN',
+  channel: 'Organic', campaign_name: '', utm_source: '', utm_medium: '',
+  utm_campaign: '', utm_content: '', utm_term: '', ad_id: '',
+  status: 'lead', funnel_level: 'Awareness', lead_score: 0, notes: '',
+}
+
+function parseUtmFromUrl(raw: string, setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>) {
+  try {
+    const url = new URL(raw.includes('://') ? raw : 'https://' + raw)
+    const p = url.searchParams
+    setForm(f => ({
+      ...f,
+      utm_source: p.get('utm_source') ?? f.utm_source,
+      utm_medium: p.get('utm_medium') ?? f.utm_medium,
+      utm_campaign: p.get('utm_campaign') ?? f.utm_campaign,
+      utm_content: p.get('utm_content') ?? f.utm_content,
+      utm_term: p.get('utm_term') ?? f.utm_term,
+    }))
+  } catch {}
+}
+
+export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [channelFilter, setChannelFilter] = useState('All')
+  const [statusFilter, setStatusFilter] = useState('All')
+  const [showForm, setShowForm] = useState(false)
+  const [showUtm, setShowUtm] = useState(false)
+  const [utmUrl, setUtmUrl] = useState('')
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
+  async function fetchUsers() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) setError(error.message)
+    else setUsers(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchUsers() }, [])
+
+  async function addUser(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    const { error } = await supabase.from('users').insert([{
+      ...form,
+      lead_score: Number(form.lead_score),
+      phone: form.phone || null,
+      country: form.country || null,
+      city: form.city || null,
+      campaign_name: form.campaign_name || null,
+      utm_source: form.utm_source || null,
+      utm_medium: form.utm_medium || null,
+      utm_campaign: form.utm_campaign || null,
+      utm_content: form.utm_content || null,
+      utm_term: form.utm_term || null,
+      ad_id: form.ad_id || null,
+      notes: form.notes || null,
+    }])
+    setSaving(false)
+    if (error) { setError(error.message); return }
+    setShowForm(false)
+    setForm(emptyForm)
+    setUtmUrl('')
+    fetchUsers()
+  }
+
+  const filtered = users.filter(u => {
+    const q = search.toLowerCase()
+    return (
+      (!search || u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) ||
+        (u.campaign_name ?? '').toLowerCase().includes(q)) &&
+      (channelFilter === 'All' || u.channel === channelFilter) &&
+      (statusFilter === 'All' || u.status === statusFilter)
+    )
+  })
+
+  const summary = {
+    total: users.length,
+    active: users.filter(u => u.status === 'active').length,
+    converted: users.filter(u => u.status === 'converted').length,
+    leads: users.filter(u => u.status === 'lead').length,
+  }
+
+  const field = (label: string, key: keyof typeof emptyForm, type = 'text', opts?: string[]) => (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-slate-500">{label}</label>
+      {opts ? (
+        <select value={form[key] as string} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          {opts.map(o => <option key={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input type={type} value={form[key] as string} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      )}
+    </div>
+  )
+
+  return (
+    <div>
+      <Header title="Users" subtitle={loading ? 'Loading...' : `${summary.total} total users`} />
+      <div className="p-6 space-y-6">
+
+        {error && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-center justify-between">
+            {error}
+            <button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
+          </div>
+        )}
+
+        {/* Summary */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Total Users', value: summary.total, color: 'text-slate-900' },
+            { label: 'Active', value: summary.active, color: 'text-emerald-600' },
+            { label: 'Converted', value: summary.converted, color: 'text-indigo-600' },
+            { label: 'Leads', value: summary.leads, color: 'text-amber-600' },
+          ].map(s => (
+            <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-xs text-slate-500">{s.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${s.color}`}>
+                {loading ? <span className="animate-pulse bg-gray-200 rounded h-7 w-10 inline-block" /> : s.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Filters + Add */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input type="text" placeholder="Search name, email or campaign..."
+              value={search} onChange={e => setSearch(e.target.value)}
+              className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <Filter className="h-4 w-4 text-slate-400" />
+          <select value={channelFilter} onChange={e => setChannelFilter(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-slate-700">
+            {['All', 'Meta', 'Google', 'TikTok', 'LinkedIn', 'Organic', 'Email', 'Other'].map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-slate-700">
+            {['All', 'lead', 'active', 'converted', 'inactive'].map(s => <option key={s}>{s}</option>)}
+          </select>
+          <button onClick={() => setShowForm(v => !v)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+            <Plus className="h-4 w-4" /> Add User
+          </button>
+        </div>
+
+        {/* Add User Form */}
+        {showForm && (
+          <div className="rounded-xl border border-indigo-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold text-slate-900">Add New User</h3>
+              <button onClick={() => setShowForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
+            </div>
+            <form onSubmit={addUser} className="space-y-5">
+
+              {/* Basic info */}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Basic Info</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-500">Full Name *</label>
+                    <input required value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-500">Email *</label>
+                    <input required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  {field('Phone', 'phone')}
+                  {field('Country', 'country')}
+                  {field('City', 'city')}
+                  {field('Language', 'language', 'text', ['EN', 'HE', 'ES', 'FR', 'DE', 'PT', 'AR', 'Other'])}
+                </div>
+              </div>
+
+              {/* Acquisition */}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Acquisition</p>
+
+                {/* UTM URL Parser */}
+                <div className="mb-3 flex gap-2">
+                  <div className="relative flex-1">
+                    <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input type="text" placeholder="Paste landing page URL to auto-fill UTM fields..."
+                      value={utmUrl} onChange={e => setUtmUrl(e.target.value)}
+                      className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <button type="button" onClick={() => parseUtmFromUrl(utmUrl, setForm)}
+                    className="px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg hover:bg-slate-700">
+                    Parse
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {field('Channel', 'channel', 'text', ['Meta', 'Google', 'TikTok', 'LinkedIn', 'Organic', 'Email', 'Other'])}
+                  {field('Campaign Name', 'campaign_name')}
+                  {field('Ad ID', 'ad_id')}
+                  <div />
+                  {field('utm_source', 'utm_source')}
+                  {field('utm_medium', 'utm_medium')}
+                  {field('utm_campaign', 'utm_campaign')}
+                  {field('utm_content', 'utm_content')}
+                </div>
+              </div>
+
+              {/* Funnel */}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Funnel</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {field('Status', 'status', 'text', ['lead', 'active', 'converted', 'inactive'])}
+                  {field('Funnel Level', 'funnel_level', 'text', ['Awareness', 'Interest', 'Consideration', 'Intent', 'Converted'])}
+                  {field('Lead Score (0–100)', 'lead_score', 'number')}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Notes</label>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button type="submit" disabled={saving}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {saving ? 'Saving...' : 'Save User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading users...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 text-slate-400">
+              {users.length === 0
+                ? <p>No users yet — click <strong className="text-slate-600">Add User</strong> to add your first one.</p>
+                : 'No users match your filters.'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {['Name', 'Status', 'Level', 'Channel', 'Campaign', 'UTM Source', 'Country', 'Date', 'Score', ''].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map(user => (
+                    <>
+                      <tr key={user.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => setExpandedRow(expandedRow === user.id ? null : user.id)}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-slate-900">{user.full_name}</p>
+                          <p className="text-xs text-slate-400">{user.email}</p>
+                        </td>
+                        <td className="px-4 py-3"><Badge label={user.status} variant={statusVariant[user.status]} /></td>
+                        <td className="px-4 py-3"><Badge label={user.funnel_level} variant={levelVariant[user.funnel_level]} /></td>
+                        <td className="px-4 py-3 text-slate-700">{user.channel ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs max-w-32 truncate">{user.campaign_name ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs">{user.utm_source ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500">{user.country ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`font-bold text-sm ${user.lead_score >= 70 ? 'text-emerald-600' : user.lead_score >= 40 ? 'text-amber-600' : 'text-slate-400'}`}>
+                            {user.lead_score}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-400">
+                          {expandedRow === user.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </td>
+                      </tr>
+                      {expandedRow === user.id && (
+                        <tr key={user.id + '-exp'} className="bg-indigo-50">
+                          <td colSpan={10} className="px-6 py-4">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
+                              {[
+                                { label: 'Phone', value: user.phone },
+                                { label: 'City', value: user.city },
+                                { label: 'Language', value: user.language },
+                                { label: 'Ad ID', value: user.ad_id },
+                                { label: 'utm_medium', value: user.utm_medium },
+                                { label: 'utm_campaign', value: user.utm_campaign },
+                                { label: 'utm_content', value: user.utm_content },
+                                { label: 'utm_term', value: user.utm_term },
+                                { label: 'Converted At', value: user.converted_at ? new Date(user.converted_at).toLocaleDateString() : null },
+                                { label: 'Last Active', value: new Date(user.last_active_at).toLocaleDateString() },
+                              ].map(f => (
+                                <div key={f.label}>
+                                  <p className="text-slate-400 font-medium">{f.label}</p>
+                                  <p className="text-slate-700 mt-0.5">{f.value ?? '—'}</p>
+                                </div>
+                              ))}
+                              {user.notes && (
+                                <div className="col-span-2 md:col-span-5">
+                                  <p className="text-slate-400 font-medium">Notes</p>
+                                  <p className="text-slate-700 mt-0.5">{user.notes}</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="border-t border-gray-100 px-4 py-3 text-xs text-slate-400">
+            {loading ? 'Loading...' : `Showing ${filtered.length} of ${users.length} users`}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
