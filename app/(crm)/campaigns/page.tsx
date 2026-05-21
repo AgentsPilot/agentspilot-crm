@@ -12,6 +12,8 @@ type Campaign = {
   status: 'active' | 'paused' | 'draft' | 'ended'
   budget: number
   spent: number
+  impressions: number
+  clicks: number
   start_date: string | null
   end_date: string | null
   utm_source: string | null
@@ -22,7 +24,7 @@ type Campaign = {
   created_at: string
 }
 
-type CampaignWithLeads = Campaign & { leads: number; cr: number; cpl: number }
+type CampaignWithLeads = Campaign & { leads: number; cr: number; cpl: number; ctr: number; landingCr: number }
 
 const statusVariant = { active: 'success', paused: 'warning', draft: 'neutral', ended: 'danger' } as const
 const channelVariant: Record<string, 'indigo' | 'info' | 'danger' | 'success' | 'neutral'> = {
@@ -32,7 +34,8 @@ const channelVariant: Record<string, 'indigo' | 'info' | 'danger' | 'success' | 
 
 const emptyForm = {
   name: '', channel: 'Meta', status: 'draft' as Campaign['status'],
-  budget: '', spent: '', start_date: '', end_date: '',
+  budget: '', spent: '', impressions: '', clicks: '',
+  start_date: '', end_date: '',
   utm_source: '', utm_medium: '', utm_campaign: '', goal: '', notes: '',
 }
 
@@ -98,7 +101,9 @@ export default function CampaignsPage() {
       const converted = campLeads.filter(u => u.status === 'converted').length
       const cr = leads > 0 ? Math.round((converted / leads) * 100 * 10) / 10 : 0
       const cpl = leads > 0 && c.spent > 0 ? Math.round((c.spent / leads) * 10) / 10 : 0
-      return { ...c, leads, cr, cpl }
+      const ctr = c.impressions > 0 ? Math.round((c.clicks / c.impressions) * 100 * 10) / 10 : 0
+      const landingCr = c.clicks > 0 ? Math.round((leads / c.clicks) * 100 * 10) / 10 : 0
+      return { ...c, leads, cr, cpl, ctr, landingCr }
     })
     setCampaigns(enriched)
     setLoading(false)
@@ -127,6 +132,7 @@ export default function CampaignsPage() {
     setForm({
       name: c.name, channel: c.channel ?? 'Meta', status: c.status,
       budget: String(c.budget), spent: String(c.spent),
+      impressions: String(c.impressions ?? 0), clicks: String(c.clicks ?? 0),
       start_date: c.start_date ?? '', end_date: c.end_date ?? '',
       utm_source: c.utm_source ?? '', utm_medium: c.utm_medium ?? '',
       utm_campaign: c.utm_campaign ?? '', goal: c.goal ?? '', notes: c.notes ?? '',
@@ -158,6 +164,8 @@ export default function CampaignsPage() {
       status: form.status,
       budget: Number(form.budget) || 0,
       spent: Number(form.spent) || 0,
+      impressions: Number(form.impressions) || 0,
+      clicks: Number(form.clicks) || 0,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
       utm_source: form.utm_source || null,
@@ -296,6 +304,12 @@ export default function CampaignsPage() {
                   <FormField label="Spent ($)">
                     <input type="number" value={form.spent} onChange={e => setForm(f => ({ ...f, spent: e.target.value }))} className={inputCls()} placeholder="0" />
                   </FormField>
+                  <FormField label="Impressions">
+                    <input type="number" value={form.impressions} onChange={e => setForm(f => ({ ...f, impressions: e.target.value }))} className={inputCls()} placeholder="0" />
+                  </FormField>
+                  <FormField label="Clicks">
+                    <input type="number" value={form.clicks} onChange={e => setForm(f => ({ ...f, clicks: e.target.value }))} className={inputCls()} placeholder="0" />
+                  </FormField>
                   <FormField label="Start Date">
                     <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} className={inputCls()} />
                   </FormField>
@@ -360,8 +374,11 @@ export default function CampaignsPage() {
                     { label: 'Spent', value: `$${viewCampaign.spent.toLocaleString()}` },
                     { label: 'Start Date', value: viewCampaign.start_date ?? '—' },
                     { label: 'End Date', value: viewCampaign.end_date ?? '—' },
+                    { label: 'Impressions', value: viewCampaign.impressions > 0 ? viewCampaign.impressions.toLocaleString() : '—' },
+                    { label: 'Clicks', value: viewCampaign.clicks > 0 ? viewCampaign.clicks.toLocaleString() : '—' },
+                    { label: 'CTR%', value: viewCampaign.ctr > 0 ? `${viewCampaign.ctr}%` : '—' },
                     { label: 'Leads', value: viewCampaign.leads },
-                    { label: 'CR%', value: viewCampaign.cr > 0 ? `${viewCampaign.cr}%` : '—' },
+                    { label: 'Landing CR%', value: viewCampaign.landingCr > 0 ? `${viewCampaign.landingCr}%` : '—' },
                     { label: 'CPL', value: viewCampaign.cpl > 0 ? `$${viewCampaign.cpl}` : '—' },
                   ].map(r => (
                     <div key={r.label}>
@@ -430,7 +447,7 @@ export default function CampaignsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    {['Campaign', 'Channel', 'Status', 'Budget', 'Spent', 'Leads', 'CR%', 'CPL', 'Start Date', 'Actions'].map(h => (
+                    {['Campaign', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR%', 'Leads', 'Landing CR%', 'CPL', 'Start Date', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -455,12 +472,17 @@ export default function CampaignsPage() {
                           {['active', 'paused', 'draft', 'ended'].map(s => <option key={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-3 text-slate-700">${c.budget.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-slate-700">${c.spent.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-slate-700">{c.impressions > 0 ? c.impressions.toLocaleString() : '—'}</td>
+                      <td className="px-4 py-3 text-slate-700">{c.clicks > 0 ? c.clicks.toLocaleString() : '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`font-bold ${c.ctr >= 3 ? 'text-emerald-600' : c.ctr >= 1 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          {c.ctr > 0 ? `${c.ctr}%` : '—'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-medium text-indigo-600">{c.leads}</td>
                       <td className="px-4 py-3">
-                        <span className={`font-bold ${c.cr >= 10 ? 'text-emerald-600' : c.cr >= 5 ? 'text-amber-600' : 'text-slate-400'}`}>
-                          {c.cr > 0 ? `${c.cr}%` : '—'}
+                        <span className={`font-bold ${c.landingCr >= 10 ? 'text-emerald-600' : c.landingCr >= 5 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          {c.landingCr > 0 ? `${c.landingCr}%` : '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-slate-700">{c.cpl > 0 ? `$${c.cpl}` : '—'}</td>
