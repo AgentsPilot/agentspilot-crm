@@ -273,17 +273,17 @@ export default function PipelinePage() {
                         return (
                           <div key={deal.id} className={`rounded-xl border p-4 transition-shadow ${
                             isDraft
-                              ? 'border-dashed border-zinc-600 bg-white opacity-70'
-                              : 'border-gray-200 bg-white hover:border-[#444]'
+                              ? 'border-dashed border-gray-300 bg-gray-50 opacity-80'
+                              : 'border-gray-200 bg-white hover:shadow-md'
                           }`}>
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <p className={`text-sm font-semibold truncate ${isDraft ? 'text-slate-500' : 'text-white'}`}>
+                                  <p className={`text-sm font-semibold truncate ${isDraft ? 'text-slate-400' : 'text-slate-900'}`}>
                                     {deal.contact_name}
                                   </p>
                                   {isDraft && (
-                                    <span className="text-xs bg-zinc-700 text-slate-500 px-1.5 py-0.5 rounded font-medium shrink-0">Draft</span>
+                                    <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded font-medium shrink-0">Draft</span>
                                   )}
                                 </div>
                                 {deal.company && <p className="text-xs text-slate-400 truncate">{deal.company}</p>}
@@ -337,7 +337,7 @@ export default function PipelinePage() {
                     </div>
 
                     {stageDeals.length === 0 && (
-                      <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-xs text-slate-600">
+                      <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-xs text-slate-400">
                         No deals
                       </div>
                     )}
