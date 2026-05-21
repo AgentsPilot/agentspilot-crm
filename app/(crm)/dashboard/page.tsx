@@ -119,12 +119,12 @@ export default function DashboardPage() {
     .slice(0, 5)
 
   const kpis = [
-    { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50', sub: `${activeCampaigns} active campaigns` },
-    { label: 'Pipeline Value', value: `$${pipelineValue.toLocaleString()}`, icon: DollarSign, color: 'text-indigo-600', bg: 'bg-indigo-50', sub: `${deals.filter(d => !['Won','Lost'].includes(d.stage)).length} active deals` },
-    { label: 'Won Revenue', value: `$${wonValue.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50', sub: `${winRate}% win rate` },
-    { label: 'Active Campaigns', value: activeCampaigns, icon: Zap, color: 'text-violet-600', bg: 'bg-violet-50', sub: `${budgetUsed}% budget used` },
-    { label: 'Tasks Due Today', value: tasksDueToday, icon: CheckSquare, color: 'text-amber-600', bg: 'bg-amber-50', sub: overdueCount > 0 ? `${overdueCount} overdue` : 'No overdue tasks' },
-    { label: 'Win Rate', value: `${winRate}%`, icon: Target, color: 'text-rose-600', bg: 'bg-rose-50', sub: `${wonDeals.length} of ${deals.length} deals won` },
+    { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-sky-400', bg: 'bg-sky-500/10', sub: `${activeCampaigns} active campaigns` },
+    { label: 'Pipeline Value', value: `$${pipelineValue.toLocaleString()}`, icon: DollarSign, color: 'text-orange-400', bg: 'bg-orange-500/10', sub: `${deals.filter(d => !['Won','Lost'].includes(d.stage)).length} active deals` },
+    { label: 'Won Revenue', value: `$${wonValue.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10', sub: `${winRate}% win rate` },
+    { label: 'Active Campaigns', value: activeCampaigns, icon: Zap, color: 'text-orange-400', bg: 'bg-orange-500/10', sub: `${budgetUsed}% budget used` },
+    { label: 'Tasks Due Today', value: tasksDueToday, icon: CheckSquare, color: 'text-amber-400', bg: 'bg-amber-500/10', sub: overdueCount > 0 ? `${overdueCount} overdue` : 'No overdue tasks' },
+    { label: 'Win Rate', value: `${winRate}%`, icon: Target, color: 'text-emerald-400', bg: 'bg-emerald-500/10', sub: `${wonDeals.length} of ${deals.length} deals won` },
   ]
 
   return (
@@ -135,15 +135,15 @@ export default function DashboardPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {kpis.map(k => (
-            <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div key={k.label} className="rounded-xl border border-[#222] bg-[#1a1a1a] p-4">
               <div className={`h-9 w-9 rounded-lg ${k.bg} flex items-center justify-center mb-3`}>
-                <k.icon className={`h-4.5 w-4.5 ${k.color}`} />
+                <k.icon className={`h-4 w-4 ${k.color}`} />
               </div>
-              <p className="text-xs text-slate-500">{k.label}</p>
+              <p className="text-xs text-zinc-500">{k.label}</p>
               <p className={`text-xl font-bold mt-0.5 ${k.color}`}>
-                {loading ? <span className="animate-pulse bg-gray-100 rounded h-6 w-12 inline-block" /> : k.value}
+                {loading ? <span className="animate-pulse bg-zinc-800 rounded h-6 w-12 inline-block" /> : k.value}
               </p>
-              <p className="text-xs text-slate-400 mt-1">{k.sub}</p>
+              <p className="text-xs text-zinc-600 mt-1">{k.sub}</p>
             </div>
           ))}
         </div>
@@ -151,27 +151,27 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Pipeline Funnel */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Pipeline Funnel</h2>
-            <p className="text-xs text-slate-500 mb-4">Deals by stage — all time</p>
+          <div className="rounded-xl border border-[#222] bg-[#1a1a1a] p-6">
+            <h2 className="text-sm font-semibold text-white mb-1">Pipeline Funnel</h2>
+            <p className="text-xs text-zinc-500 mb-4">Deals by stage — all time</p>
             {loading ? (
-              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+              <div className="flex items-center justify-center py-10 gap-2 text-zinc-600">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading...
               </div>
             ) : (
               <div className="space-y-2">
                 {stageCount.map(({ stage, count, value }) => (
                   <div key={stage} className="flex items-center gap-3">
-                    <div className="w-28 text-xs text-slate-600 shrink-0">{stage}</div>
-                    <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="w-28 text-xs text-zinc-500 shrink-0">{stage}</div>
+                    <div className="flex-1 h-6 bg-zinc-800 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${stageColor[stage]}`}
                         style={{ width: `${Math.max((count / maxCount) * 100, count > 0 ? 4 : 0)}%` }}
                       />
                     </div>
-                    <div className="w-6 text-xs font-semibold text-slate-700 text-right">{count}</div>
+                    <div className="w-6 text-xs font-semibold text-zinc-300 text-right">{count}</div>
                     {value > 0 && (
-                      <div className="w-20 text-xs text-slate-400 text-right">${value.toLocaleString()}</div>
+                      <div className="w-20 text-xs text-zinc-600 text-right">${value.toLocaleString()}</div>
                     )}
                   </div>
                 ))}
@@ -180,24 +180,24 @@ export default function DashboardPage() {
           </div>
 
           {/* Leads by Channel */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900 mb-1">Leads by Channel</h2>
-            <p className="text-xs text-slate-500 mb-4">Source attribution from UTM data</p>
+          <div className="rounded-xl border border-[#222] bg-[#1a1a1a] p-6">
+            <h2 className="text-sm font-semibold text-white mb-1">Leads by Channel</h2>
+            <p className="text-xs text-zinc-500 mb-4">Source attribution from UTM data</p>
             {loading ? (
-              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+              <div className="flex items-center justify-center py-10 gap-2 text-zinc-600">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading...
               </div>
             ) : channels.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-10">No contact data yet</p>
+              <p className="text-sm text-zinc-600 text-center py-10">No contact data yet</p>
             ) : (
               <div className="space-y-3">
                 {channels.map(([ch, count]) => (
                   <div key={ch} className="flex items-center gap-3">
                     <div className="flex items-center gap-2 w-24 shrink-0">
                       <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: channelColor[ch] ?? '#94a3b8' }} />
-                      <span className="text-xs text-slate-700 truncate">{ch}</span>
+                      <span className="text-xs text-zinc-300 truncate">{ch}</span>
                     </div>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="flex-1 h-5 bg-zinc-800 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
@@ -207,8 +207,8 @@ export default function DashboardPage() {
                         }}
                       />
                     </div>
-                    <div className="w-8 text-xs font-semibold text-slate-700 text-right">{count}</div>
-                    <div className="w-10 text-xs text-slate-400 text-right">
+                    <div className="w-8 text-xs font-semibold text-zinc-300 text-right">{count}</div>
+                    <div className="w-10 text-xs text-zinc-600 text-right">
                       {Math.round((count / totalLeads) * 100)}%
                     </div>
                   </div>
@@ -221,33 +221,33 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Recent Contacts */}
-          <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#222] flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Recent Contacts</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Last 5 leads added</p>
+                <h2 className="text-sm font-semibold text-white">Recent Contacts</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Last 5 leads added</p>
               </div>
-              <a href="/contacts" className="text-xs text-indigo-600 hover:underline">View all →</a>
+              <a href="/contacts" className="text-xs text-orange-400 hover:underline">View all →</a>
             </div>
             {loading ? (
-              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+              <div className="flex items-center justify-center py-10 gap-2 text-zinc-600">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading...
               </div>
             ) : recentContacts.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-10">No contacts yet</p>
+              <p className="text-sm text-zinc-600 text-center py-10">No contacts yet</p>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-[#222]">
                 {recentContacts.map(c => (
                   <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-700 truncate">{c.campaign_name ?? '—'}</p>
-                      <p className="text-xs text-slate-400">{c.utm_source ?? 'Organic'} · {new Date(c.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs font-medium text-zinc-300 truncate">{c.campaign_name ?? '—'}</p>
+                      <p className="text-xs text-zinc-600">{c.utm_source ?? 'Organic'} · {new Date(c.created_at).toLocaleDateString()}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
-                      c.status === 'Customer' ? 'bg-emerald-100 text-emerald-700' :
-                      c.status === 'Qualified' ? 'bg-violet-100 text-violet-700' :
-                      c.status === 'Contacted' ? 'bg-indigo-100 text-indigo-700' :
-                      'bg-gray-100 text-gray-600'
+                      c.status === 'converted' ? 'bg-emerald-500/15 text-emerald-400' :
+                      c.status === 'active' ? 'bg-sky-500/15 text-sky-400' :
+                      c.status === 'lead' ? 'bg-amber-500/15 text-amber-400' :
+                      'bg-zinc-700/50 text-zinc-400'
                     }`}>{c.status ?? 'New'}</span>
                   </div>
                 ))}
@@ -256,41 +256,41 @@ export default function DashboardPage() {
           </div>
 
           {/* Campaign Summary */}
-          <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#222] flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Campaigns</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Budget & spend overview</p>
+                <h2 className="text-sm font-semibold text-white">Campaigns</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">Budget & spend overview</p>
               </div>
-              <a href="/campaigns" className="text-xs text-indigo-600 hover:underline">View all →</a>
+              <a href="/campaigns" className="text-xs text-orange-400 hover:underline">View all →</a>
             </div>
             {loading ? (
-              <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+              <div className="flex items-center justify-center py-10 gap-2 text-zinc-600">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading...
               </div>
             ) : campaigns.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-10">No campaigns yet</p>
+              <p className="text-sm text-zinc-600 text-center py-10">No campaigns yet</p>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-[#222]">
                 {campaigns.map(c => {
                   const pct = c.budget && c.budget > 0 ? Math.round(((c.spend ?? 0) / c.budget) * 100) : 0
                   return (
                     <div key={c.id} className="px-5 py-3">
                       <div className="flex items-center justify-between mb-1">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          c.status === 'Active' ? 'bg-emerald-100 text-emerald-700' :
-                          c.status === 'Paused' ? 'bg-amber-100 text-amber-700' :
-                          'bg-gray-100 text-gray-500'
+                          c.status === 'Active' ? 'bg-emerald-500/15 text-emerald-400' :
+                          c.status === 'Paused' ? 'bg-amber-500/15 text-amber-400' :
+                          'bg-zinc-700/50 text-zinc-400'
                         }`}>{c.status}</span>
-                        <span className="text-xs text-slate-500">${(c.spend ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
+                        <span className="text-xs text-zinc-500">${(c.spend ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
                       </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${pct >= 90 ? 'bg-red-400' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
                           style={{ width: `${Math.min(pct, 100)}%` }}
                         />
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">{pct}% used</p>
+                      <p className="text-xs text-zinc-600 mt-1">{pct}% used</p>
                     </div>
                   )
                 })}
