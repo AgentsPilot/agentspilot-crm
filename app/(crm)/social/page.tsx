@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Calendar, Layout, PenSquare, Linkedin, Instagram, Globe, ChevronLeft, ChevronRight, Pencil, Check } from 'lucide-react'
+import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SocialPost = {
@@ -83,10 +83,10 @@ const TEMPLATES = [
 const ALL_PLATFORMS = ['LinkedIn', 'Facebook', 'Instagram', 'TikTok', 'Website', 'Other']
 
 const platformIcon: Record<string, React.ReactNode> = {
-  LinkedIn: <Linkedin className="h-4 w-4" />,
+  LinkedIn: <span className="text-xs font-bold">in</span>,
   Facebook: <span className="text-xs font-bold">f</span>,
-  Instagram: <Instagram className="h-4 w-4" />,
-  TikTok: <span className="text-xs font-bold">TK</span>,
+  Instagram: <span className="text-xs font-bold">ig</span>,
+  TikTok: <span className="text-xs font-bold">tk</span>,
   Website: <Globe className="h-4 w-4" />,
   Other: <Globe className="h-4 w-4" />,
 }
@@ -259,7 +259,7 @@ export default function SocialPage() {
 
   const TABS = [
     { id: 'calendar' as TabId, label: 'Monthly Calendar', icon: Calendar },
-    { id: 'platform' as TabId, label: 'By Platform', icon: Layout },
+    { id: 'platform' as TabId, label: 'By Platform', icon: LayoutGrid },
     { id: 'create' as TabId, label: editingPost ? 'Edit Post' : 'Create Post', icon: PenSquare },
   ]
 
