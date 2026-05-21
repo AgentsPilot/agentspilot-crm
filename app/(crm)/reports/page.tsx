@@ -67,15 +67,15 @@ function pct(n: number, total: number) {
 function SectionTitle({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="mb-4">
-      <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-      <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
+      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      <p className="text-xs text-zinc-500 mt-0.5">{sub}</p>
     </div>
   )
 }
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-[#222] bg-[#1a1a1a] p-6 ${className}`}>
       {children}
     </div>
   )
@@ -83,7 +83,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 function LoadingRow() {
   return (
-    <div className="flex items-center justify-center py-10 gap-2 text-slate-300">
+    <div className="flex items-center justify-center py-10 gap-2 text-zinc-600">
       <Loader2 className="h-4 w-4 animate-spin" /> Loading...
     </div>
   )
@@ -220,12 +220,12 @@ export default function ReportsPage() {
     : 0
 
   const summaryKpis = [
-    { label: 'Total Leads', value: totalLeads, color: 'text-sky-600' },
-    { label: 'Conversion Rate', value: `${overallCR}%`, color: 'text-violet-600' },
-    { label: 'Won Revenue', value: `$${totalWonValue.toLocaleString()}`, color: 'text-emerald-600' },
-    { label: 'Total Spend', value: `$${totalSpend.toLocaleString()}`, color: 'text-amber-600' },
-    { label: 'Avg CPL', value: overallCPL > 0 ? `$${overallCPL}` : '—', color: 'text-indigo-600' },
-    { label: 'Avg Lead Score', value: avgLeadScore, color: 'text-rose-600' },
+    { label: 'Total Leads', value: totalLeads, color: 'text-sky-400' },
+    { label: 'Conversion Rate', value: `${overallCR}%`, color: 'text-violet-400' },
+    { label: 'Won Revenue', value: `$${totalWonValue.toLocaleString()}`, color: 'text-emerald-400' },
+    { label: 'Total Spend', value: `$${totalSpend.toLocaleString()}`, color: 'text-amber-400' },
+    { label: 'Avg CPL', value: overallCPL > 0 ? `$${overallCPL}` : '—', color: 'text-orange-400' },
+    { label: 'Avg Lead Score', value: avgLeadScore, color: 'text-rose-400' },
   ]
 
   return (
@@ -236,10 +236,10 @@ export default function ReportsPage() {
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {summaryKpis.map(k => (
-            <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">{k.label}</p>
+            <div key={k.label} className="rounded-xl border border-[#222] bg-[#1a1a1a] p-4">
+              <p className="text-xs text-zinc-500">{k.label}</p>
               <p className={`text-2xl font-bold mt-1 ${k.color}`}>
-                {loading ? <span className="animate-pulse bg-gray-100 rounded h-7 w-14 inline-block" /> : k.value}
+                {loading ? <span className="animate-pulse bg-zinc-800 rounded h-7 w-14 inline-block" /> : k.value}
               </p>
             </div>
           ))}
@@ -256,13 +256,13 @@ export default function ReportsPage() {
                   <div key={r.ch} className="flex items-center gap-3">
                     <div className="flex items-center gap-2 w-20 shrink-0">
                       <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: channelColor[r.ch] ?? '#94a3b8' }} />
-                      <span className="text-xs text-slate-700 truncate">{r.ch}</span>
+                      <span className="text-xs text-zinc-300 truncate">{r.ch}</span>
                     </div>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="flex-1 h-5 bg-zinc-800 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${Math.max((r.leads / maxLeads) * 100, 4)}%`, backgroundColor: channelColor[r.ch] ?? '#94a3b8', opacity: 0.75 }} />
                     </div>
-                    <span className="w-6 text-xs font-semibold text-slate-700 text-right">{r.leads}</span>
-                    <span className="w-10 text-xs text-slate-400 text-right">{pct(r.leads, totalLeads)}%</span>
+                    <span className="w-6 text-xs font-semibold text-zinc-300 text-right">{r.leads}</span>
+                    <span className="w-10 text-xs text-zinc-600 text-right">{pct(r.leads, totalLeads)}%</span>
                   </div>
                 ))}
               </div>
@@ -276,13 +276,13 @@ export default function ReportsPage() {
               <div className="space-y-3">
                 {funnelRows.map((r, i) => (
                   <div key={r.level} className="flex items-center gap-3">
-                    <div className="w-24 text-xs text-slate-600 shrink-0">{r.level}</div>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="w-24 text-xs text-zinc-500 shrink-0">{r.level}</div>
+                    <div className="flex-1 h-5 bg-zinc-800 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${Math.max((r.count / maxFunnel) * 100, r.count > 0 ? 4 : 0)}%`, backgroundColor: funnelColor[r.level] }} />
                     </div>
-                    <span className="w-6 text-xs font-semibold text-slate-700 text-right">{r.count}</span>
+                    <span className="w-6 text-xs font-semibold text-zinc-300 text-right">{r.count}</span>
                     {i > 0 && funnelRows[i - 1].count > 0 && (
-                      <span className="w-12 text-xs text-slate-400 text-right">
+                      <span className="w-12 text-xs text-zinc-600 text-right">
                         {pct(r.count, funnelRows[i - 1].count)}% CR
                       </span>
                     )}
@@ -300,11 +300,11 @@ export default function ReportsPage() {
           {loading ? <LoadingRow /> : (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
               {stageRows.map(r => (
-                <div key={r.stage} className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center">
+                <div key={r.stage} className="rounded-lg border border-[#333] bg-[#111] p-4 text-center">
                   <div className="h-2 w-2 rounded-full mx-auto mb-2" style={{ backgroundColor: stageColor[r.stage] }} />
-                  <p className="text-xs text-slate-500 mb-1">{r.stage}</p>
+                  <p className="text-xs text-zinc-500 mb-1">{r.stage}</p>
                   <p className="text-2xl font-bold" style={{ color: stageColor[r.stage] }}>{r.count}</p>
-                  {r.value > 0 && <p className="text-xs text-slate-400 mt-1">${r.value.toLocaleString()}</p>}
+                  {r.value > 0 && <p className="text-xs text-zinc-600 mt-1">${r.value.toLocaleString()}</p>}
                 </div>
               ))}
             </div>
@@ -318,54 +318,54 @@ export default function ReportsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr className="border-b border-[#333]">
                     {['Campaign', 'Channel', 'Status', 'Leads', 'CR%', 'CPL', 'Won $', 'Spend', 'Budget'].map(h => (
-                      <th key={h} className="pb-2 text-left text-xs font-medium text-slate-500 pr-4 whitespace-nowrap">{h}</th>
+                      <th key={h} className="pb-2 text-left text-xs font-medium text-zinc-500 pr-4 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-[#333]">
                   {campRows.map(r => (
-                    <tr key={r.name} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 pr-4 text-xs font-medium text-slate-800 max-w-40 truncate">{r.name}</td>
+                    <tr key={r.name} className="hover:bg-[#222] transition-colors">
+                      <td className="py-3 pr-4 text-xs font-medium text-white max-w-40 truncate">{r.name}</td>
                       <td className="py-3 pr-4">
                         <div className="flex items-center gap-1.5">
                           <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: channelColor[r.channel] ?? '#94a3b8' }} />
-                          <span className="text-xs text-slate-600">{r.channel}</span>
+                          <span className="text-xs text-zinc-400">{r.channel}</span>
                         </div>
                       </td>
                       <td className="py-3 pr-4">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          r.status === 'active' || r.status === 'Active' ? 'bg-emerald-100 text-emerald-700' :
-                          r.status === 'paused' || r.status === 'Paused' ? 'bg-amber-100 text-amber-700' :
-                          'bg-gray-100 text-gray-500'
+                          r.status === 'active' || r.status === 'Active' ? 'bg-emerald-500/15 text-emerald-400' :
+                          r.status === 'paused' || r.status === 'Paused' ? 'bg-amber-500/15 text-amber-400' :
+                          'bg-zinc-700/50 text-zinc-400'
                         }`}>{r.status}</span>
                       </td>
-                      <td className="py-3 pr-4 text-xs text-slate-700">{r.leads}</td>
-                      <td className="py-3 pr-4 text-xs font-semibold" style={{ color: r.cr >= 20 ? '#10b981' : r.cr >= 10 ? '#6366f1' : '#f59e0b' }}>{r.cr}%</td>
-                      <td className="py-3 pr-4 text-xs text-slate-700">{r.cpl > 0 ? `$${r.cpl}` : '—'}</td>
-                      <td className="py-3 pr-4 text-xs font-semibold text-emerald-600">{r.wonValue > 0 ? `$${r.wonValue.toLocaleString()}` : '—'}</td>
-                      <td className="py-3 pr-4 text-xs text-slate-700">${r.spend.toLocaleString()}</td>
+                      <td className="py-3 pr-4 text-xs text-zinc-300">{r.leads}</td>
+                      <td className="py-3 pr-4 text-xs font-semibold" style={{ color: r.cr >= 20 ? '#10b981' : r.cr >= 10 ? '#f97316' : '#f59e0b' }}>{r.cr}%</td>
+                      <td className="py-3 pr-4 text-xs text-zinc-300">{r.cpl > 0 ? `$${r.cpl}` : '—'}</td>
+                      <td className="py-3 pr-4 text-xs font-semibold text-emerald-400">{r.wonValue > 0 ? `$${r.wonValue.toLocaleString()}` : '—'}</td>
+                      <td className="py-3 pr-4 text-xs text-zinc-300">${r.spend.toLocaleString()}</td>
                       <td className="py-3 pr-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${r.budgetPct >= 90 ? 'bg-red-400' : r.budgetPct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
                               style={{ width: `${Math.min(r.budgetPct, 100)}%` }} />
                           </div>
-                          <span className="text-xs text-slate-400">{r.budgetPct}%</span>
+                          <span className="text-xs text-zinc-600">{r.budgetPct}%</span>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t border-gray-200 bg-gray-50">
-                    <td colSpan={3} className="py-2.5 text-xs font-semibold text-slate-600">Totals</td>
-                    <td className="py-2.5 text-xs font-bold text-slate-800">{totalLeads}</td>
-                    <td className="py-2.5 text-xs font-bold text-violet-600">{overallCR}%</td>
-                    <td className="py-2.5 text-xs font-bold text-slate-800">{overallCPL > 0 ? `$${overallCPL}` : '—'}</td>
-                    <td className="py-2.5 text-xs font-bold text-emerald-600">${totalWonValue.toLocaleString()}</td>
-                    <td className="py-2.5 text-xs font-bold text-slate-800">${totalSpend.toLocaleString()}</td>
+                  <tr className="border-t border-[#333] bg-[#111]">
+                    <td colSpan={3} className="py-2.5 text-xs font-semibold text-zinc-500">Totals</td>
+                    <td className="py-2.5 text-xs font-bold text-white">{totalLeads}</td>
+                    <td className="py-2.5 text-xs font-bold text-violet-400">{overallCR}%</td>
+                    <td className="py-2.5 text-xs font-bold text-white">{overallCPL > 0 ? `$${overallCPL}` : '—'}</td>
+                    <td className="py-2.5 text-xs font-bold text-emerald-400">${totalWonValue.toLocaleString()}</td>
+                    <td className="py-2.5 text-xs font-bold text-white">${totalSpend.toLocaleString()}</td>
                     <td />
                   </tr>
                 </tfoot>
@@ -383,14 +383,14 @@ export default function ReportsPage() {
               <div className="space-y-3">
                 {scoreBuckets.map(b => (
                   <div key={b.label} className="flex items-center gap-3">
-                    <div className="w-14 text-xs text-slate-500 shrink-0">{b.label}</div>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${Math.max((b.count / maxScore) * 100, b.count > 0 ? 4 : 0)}%` }} />
+                    <div className="w-14 text-xs text-zinc-500 shrink-0">{b.label}</div>
+                    <div className="flex-1 h-5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-orange-500 rounded-full opacity-75" style={{ width: `${Math.max((b.count / maxScore) * 100, b.count > 0 ? 4 : 0)}%` }} />
                     </div>
-                    <span className="w-5 text-xs font-semibold text-slate-700 text-right">{b.count}</span>
+                    <span className="w-5 text-xs font-semibold text-zinc-300 text-right">{b.count}</span>
                   </div>
                 ))}
-                <p className="text-xs text-slate-400 mt-2">Avg score: <span className="font-semibold text-indigo-600">{avgLeadScore}</span></p>
+                <p className="text-xs text-zinc-600 mt-2">Avg score: <span className="font-semibold text-orange-400">{avgLeadScore}</span></p>
               </div>
             )}
           </Card>
@@ -399,17 +399,17 @@ export default function ReportsPage() {
           <Card>
             <SectionTitle title="Top Countries" sub="Leads by geography" />
             {loading ? <LoadingRow /> : topCountries.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-10">No data</p>
+              <p className="text-sm text-zinc-600 text-center py-10">No data</p>
             ) : (
               <div className="space-y-3">
                 {topCountries.map(([country, count]) => (
                   <div key={country} className="flex items-center gap-3">
-                    <div className="w-8 text-xs font-medium text-slate-700 shrink-0">{country}</div>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-sky-400 rounded-full" style={{ width: `${Math.max((count / maxCountry) * 100, 4)}%` }} />
+                    <div className="w-8 text-xs font-medium text-zinc-300 shrink-0">{country}</div>
+                    <div className="flex-1 h-5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-sky-400 rounded-full opacity-75" style={{ width: `${Math.max((count / maxCountry) * 100, 4)}%` }} />
                     </div>
-                    <span className="w-5 text-xs font-semibold text-slate-700 text-right">{count}</span>
-                    <span className="w-8 text-xs text-slate-400 text-right">{pct(count, totalLeads)}%</span>
+                    <span className="w-5 text-xs font-semibold text-zinc-300 text-right">{count}</span>
+                    <span className="w-8 text-xs text-zinc-600 text-right">{pct(count, totalLeads)}%</span>
                   </div>
                 ))}
               </div>
@@ -423,11 +423,11 @@ export default function ReportsPage() {
               <div className="space-y-3">
                 {taskRows.map(r => (
                   <div key={r.type} className="flex items-center gap-3">
-                    <div className="w-20 text-xs text-slate-600 shrink-0">{r.type}</div>
-                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${Math.max(r.cr, r.total > 0 ? 4 : 0)}%` }} />
+                    <div className="w-20 text-xs text-zinc-400 shrink-0">{r.type}</div>
+                    <div className="flex-1 h-5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full opacity-75" style={{ width: `${Math.max(r.cr, r.total > 0 ? 4 : 0)}%` }} />
                     </div>
-                    <span className="w-14 text-xs text-slate-500 text-right">{r.done}/{r.total}</span>
+                    <span className="w-14 text-xs text-zinc-500 text-right">{r.done}/{r.total}</span>
                   </div>
                 ))}
               </div>

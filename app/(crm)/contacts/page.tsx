@@ -64,7 +64,6 @@ export default function UsersPage() {
   const [channelFilter, setChannelFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [showForm, setShowForm] = useState(false)
-  const [showUtm, setShowUtm] = useState(false)
   const [utmUrl, setUtmUrl] = useState('')
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
@@ -86,7 +85,7 @@ export default function UsersPage() {
   async function addUser(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    const { data: contactData, error } = await supabase.from('users').insert([{
+    const { error } = await supabase.from('users').insert([{
       ...form,
       lead_score: Number(form.lead_score),
       phone: form.phone || null,
@@ -145,23 +144,23 @@ export default function UsersPage() {
       <label className="text-xs font-medium text-slate-500">{label}</label>
       {opts ? (
         <select value={form[key] as string} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700">
           {opts.map(o => <option key={o}>{o}</option>)}
         </select>
       ) : (
         <input type={type} value={form[key] as string} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700" />
       )}
     </div>
   )
 
   return (
     <div>
-      <Header title="Users" subtitle={loading ? 'Loading...' : `${summary.total} total users`} />
+      <Header title="Contacts" subtitle={loading ? 'Loading...' : `${summary.total} total contacts`} />
       <div className="p-6 space-y-6">
 
         {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-center justify-between">
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400 flex items-center justify-between">
             {error}
             <button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
           </div>
@@ -170,15 +169,15 @@ export default function UsersPage() {
         {/* Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Users', value: summary.total, color: 'text-slate-900' },
-            { label: 'Active', value: summary.active, color: 'text-emerald-600' },
-            { label: 'Converted', value: summary.converted, color: 'text-indigo-600' },
-            { label: 'Leads', value: summary.leads, color: 'text-amber-600' },
+            { label: 'Total Contacts', value: summary.total, color: 'text-white' },
+            { label: 'Active', value: summary.active, color: 'text-emerald-400' },
+            { label: 'Converted', value: summary.converted, color: 'text-orange-400' },
+            { label: 'Leads', value: summary.leads, color: 'text-amber-400' },
           ].map(s => (
-            <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-slate-500">{s.label}</p>
+            <div key={s.label} className="rounded-xl border border-[#222] bg-[#1a1a1a] p-4">
+              <p className="text-xs text-zinc-500">{s.label}</p>
               <p className={`text-2xl font-bold mt-1 ${s.color}`}>
-                {loading ? <span className="animate-pulse bg-gray-200 rounded h-7 w-10 inline-block" /> : s.value}
+                {loading ? <span className="animate-pulse bg-zinc-800 rounded h-7 w-10 inline-block" /> : s.value}
               </p>
             </div>
           ))}
@@ -187,31 +186,31 @@ export default function UsersPage() {
         {/* Filters + Add */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <input type="text" placeholder="Search name, email or campaign..."
               value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="pl-9 pr-4 py-2 w-full text-sm border border-[#333] rounded-lg bg-[#1a1a1a] text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-orange-500" />
           </div>
-          <Filter className="h-4 w-4 text-slate-400" />
+          <Filter className="h-4 w-4 text-zinc-500" />
           <select value={channelFilter} onChange={e => setChannelFilter(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-slate-700">
+            className="text-sm border border-[#333] rounded-lg px-3 py-2 bg-[#1a1a1a] text-zinc-300">
             {['All', 'Meta', 'Google', 'TikTok', 'LinkedIn', 'Organic', 'Email', 'Other'].map(c => <option key={c}>{c}</option>)}
           </select>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-slate-700">
+            className="text-sm border border-[#333] rounded-lg px-3 py-2 bg-[#1a1a1a] text-zinc-300">
             {['All', 'lead', 'active', 'converted', 'inactive'].map(s => <option key={s}>{s}</option>)}
           </select>
           <button onClick={() => setShowForm(v => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
-            <Plus className="h-4 w-4" /> Add User
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+            <Plus className="h-4 w-4" /> Add Contact
           </button>
         </div>
 
-        {/* Add User Form */}
+        {/* Add User Form — white form as requested */}
         {showForm && (
-          <div className="rounded-xl border border-indigo-200 bg-white p-6 shadow-sm">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-semibold text-slate-900">Add New User</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Add New Contact</h3>
               <button onClick={() => setShowForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
             <form onSubmit={addUser} className="space-y-5">
@@ -223,12 +222,12 @@ export default function UsersPage() {
                   <div className="col-span-2 flex flex-col gap-1">
                     <label className="text-xs font-medium text-slate-500">Full Name *</label>
                     <input required value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
-                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700" />
                   </div>
                   <div className="col-span-2 flex flex-col gap-1">
                     <label className="text-xs font-medium text-slate-500">Email *</label>
                     <input required type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700" />
                   </div>
                   {field('Phone', 'phone')}
                   {field('Country', 'country')}
@@ -247,7 +246,7 @@ export default function UsersPage() {
                     <Link className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input type="text" placeholder="Paste landing page URL to auto-fill UTM fields..."
                       value={utmUrl} onChange={e => setUtmUrl(e.target.value)}
-                      className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700" />
                   </div>
                   <button type="button" onClick={() => parseUtmFromUrl(utmUrl, setForm)}
                     className="px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg hover:bg-slate-700">
@@ -281,7 +280,7 @@ export default function UsersPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-500">Notes</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-700" />
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
@@ -290,9 +289,9 @@ export default function UsersPage() {
                   Cancel
                 </button>
                 <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {saving ? 'Saving...' : 'Save User'}
+                  {saving ? 'Saving...' : 'Save Contact'}
                 </button>
               </div>
             </form>
@@ -300,56 +299,56 @@ export default function UsersPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
-              <Loader2 className="h-5 w-5 animate-spin" /> Loading users...
+            <div className="flex items-center justify-center py-20 gap-2 text-zinc-500">
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading contacts...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20 text-slate-400">
+            <div className="text-center py-20 text-zinc-600">
               {users.length === 0
-                ? <p>No users yet — click <strong className="text-slate-600">Add User</strong> to add your first one.</p>
-                : 'No users match your filters.'}
+                ? <p>No contacts yet — click <strong className="text-zinc-400">Add Contact</strong> to add your first one.</p>
+                : 'No contacts match your filters.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-[#111] border-b border-[#222]">
                   <tr>
                     {['Name', 'Status', 'Level', 'Channel', 'Campaign', 'UTM Source', 'Country', 'Date', 'Score', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-[#222]">
                   {filtered.map(user => (
                     <>
-                      <tr key={user.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      <tr key={user.id} className="hover:bg-[#222] transition-colors cursor-pointer"
                         onClick={() => setExpandedRow(expandedRow === user.id ? null : user.id)}>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-slate-900">{user.full_name}</p>
-                          <p className="text-xs text-slate-400">{user.email}</p>
+                          <p className="font-medium text-white">{user.full_name}</p>
+                          <p className="text-xs text-zinc-500">{user.email}</p>
                         </td>
                         <td className="px-4 py-3"><Badge label={user.status} variant={statusVariant[user.status]} /></td>
                         <td className="px-4 py-3"><Badge label={user.funnel_level} variant={levelVariant[user.funnel_level]} /></td>
-                        <td className="px-4 py-3 text-slate-700">{user.channel ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-500 text-xs max-w-32 truncate">{user.campaign_name ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-500 text-xs">{user.utm_source ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-500">{user.country ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                        <td className="px-4 py-3 text-zinc-300">{user.channel ?? '—'}</td>
+                        <td className="px-4 py-3 text-zinc-500 text-xs max-w-32 truncate">{user.campaign_name ?? '—'}</td>
+                        <td className="px-4 py-3 text-zinc-500 text-xs">{user.utm_source ?? '—'}</td>
+                        <td className="px-4 py-3 text-zinc-500">{user.country ?? '—'}</td>
+                        <td className="px-4 py-3 text-zinc-500 text-xs whitespace-nowrap">
                           {new Date(user.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`font-bold text-sm ${user.lead_score >= 70 ? 'text-emerald-600' : user.lead_score >= 40 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          <span className={`font-bold text-sm ${user.lead_score >= 70 ? 'text-emerald-400' : user.lead_score >= 40 ? 'text-amber-400' : 'text-zinc-600'}`}>
                             {user.lead_score}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-slate-400">
+                        <td className="px-4 py-3 text-zinc-600">
                           {expandedRow === user.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </td>
                       </tr>
                       {expandedRow === user.id && (
-                        <tr key={user.id + '-exp'} className="bg-indigo-50">
+                        <tr key={user.id + '-exp'} className="bg-[#111]">
                           <td colSpan={10} className="px-6 py-4">
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
                               {[
@@ -365,14 +364,14 @@ export default function UsersPage() {
                                 { label: 'Last Active', value: new Date(user.last_active_at).toLocaleDateString() },
                               ].map(f => (
                                 <div key={f.label}>
-                                  <p className="text-slate-400 font-medium">{f.label}</p>
-                                  <p className="text-slate-700 mt-0.5">{f.value ?? '—'}</p>
+                                  <p className="text-zinc-600 font-medium">{f.label}</p>
+                                  <p className="text-zinc-300 mt-0.5">{f.value ?? '—'}</p>
                                 </div>
                               ))}
                               {user.notes && (
                                 <div className="col-span-2 md:col-span-5">
-                                  <p className="text-slate-400 font-medium">Notes</p>
-                                  <p className="text-slate-700 mt-0.5">{user.notes}</p>
+                                  <p className="text-zinc-600 font-medium">Notes</p>
+                                  <p className="text-zinc-300 mt-0.5">{user.notes}</p>
                                 </div>
                               )}
                             </div>
@@ -385,8 +384,8 @@ export default function UsersPage() {
               </table>
             </div>
           )}
-          <div className="border-t border-gray-100 px-4 py-3 text-xs text-slate-400">
-            {loading ? 'Loading...' : `Showing ${filtered.length} of ${users.length} users`}
+          <div className="border-t border-[#222] px-4 py-3 text-xs text-zinc-600">
+            {loading ? 'Loading...' : `Showing ${filtered.length} of ${users.length} contacts`}
           </div>
         </div>
 
