@@ -6,6 +6,8 @@ import { Users, Target, DollarSign, TrendingUp, Zap, CheckSquare, Loader2 } from
 
 type Contact = {
   id: string
+  full_name: string | null
+  email: string | null
   utm_source: string | null
   utm_medium: string | null
   status: string | null
@@ -27,6 +29,8 @@ type Task = {
 
 type Campaign = {
   id: string
+  name: string | null
+  channel: string | null
   status: string
   budget: number | null
   spend: number | null
@@ -67,10 +71,10 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       const [c, d, t, ca] = await Promise.all([
-        supabase.from('users').select('id,utm_source,utm_medium,status,campaign_name,created_at'),
+        supabase.from('users').select('id,full_name,email,utm_source,utm_medium,status,campaign_name,created_at'),
         supabase.from('pipeline_deals').select('id,stage,value'),
         supabase.from('tasks').select('id,due_date,done'),
-        supabase.from('campaigns').select('id,status,budget,spend'),
+        supabase.from('campaigns').select('id,name,channel,status,budget,spend'),
       ])
       setContacts(c.data ?? [])
       setDeals(d.data ?? [])
@@ -239,9 +243,18 @@ export default function DashboardPage() {
               <div className="divide-y divide-gray-50">
                 {recentContacts.map(c => (
                   <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-slate-700 truncate">{c.campaign_name ?? '—'}</p>
-                      <p className="text-xs text-slate-400">{c.utm_source ?? 'Organic'} · {new Date(c.created_at).toLocaleDateString()}</p>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-semibold text-orange-600">
+                          {(c.full_name ?? c.email ?? '?').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-slate-800 truncate">{c.full_name ?? c.email ?? 'Unknown'}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {c.campaign_name ? `📣 ${c.campaign_name}` : (c.utm_source ?? 'Organic')} · {new Date(c.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
                       c.status === 'converted' ? 'bg-emerald-100 text-emerald-700' :
@@ -272,25 +285,30 @@ export default function DashboardPage() {
               <p className="text-sm text-slate-400 text-center py-10">No campaigns yet</p>
             ) : (
               <div className="divide-y divide-gray-50">
-                {campaigns.map(c => {
+                {campaigns.slice(0, 5).map(c => {
                   const pct = c.budget && c.budget > 0 ? Math.round(((c.spend ?? 0) / c.budget) * 100) : 0
                   return (
                     <div key={c.id} className="px-5 py-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="min-w-0 flex-1 mr-3">
+                          <p className="text-xs font-medium text-slate-800 truncate">{c.name ?? 'Unnamed Campaign'}</p>
+                          <p className="text-xs text-slate-400">{c.channel ?? '—'}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
                           c.status === 'Active' ? 'bg-emerald-100 text-emerald-700' :
                           c.status === 'Paused' ? 'bg-amber-100 text-amber-700' :
                           'bg-gray-100 text-gray-500'
                         }`}>{c.status}</span>
-                        <span className="text-xs text-slate-500">${(c.spend ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
                       </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${pct >= 90 ? 'bg-red-400' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${pct >= 90 ? 'bg-red-400' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-400 shrink-0">${(c.spend ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">{pct}% used</p>
                     </div>
                   )
                 })}
