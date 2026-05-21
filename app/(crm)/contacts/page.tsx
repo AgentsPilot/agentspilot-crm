@@ -86,7 +86,7 @@ export default function UsersPage() {
   async function addUser(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    const { error } = await supabase.from('users').insert([{
+    const { data: contactData, error } = await supabase.from('users').insert([{
       ...form,
       lead_score: Number(form.lead_score),
       phone: form.phone || null,
@@ -100,9 +100,23 @@ export default function UsersPage() {
       utm_term: form.utm_term || null,
       ad_id: form.ad_id || null,
       notes: form.notes || null,
+    }]).select().single()
+    if (error) { setSaving(false); setError(error.message); return }
+
+    // Auto-create draft pipeline deal
+    await supabase.from('pipeline_deals').insert([{
+      contact_name: form.full_name,
+      contact_email: form.email || null,
+      channel: form.channel || null,
+      campaign_name: form.campaign_name || null,
+      stage: 'New Lead',
+      priority: 'Medium',
+      value: 0,
+      is_draft: true,
+      notes: `Auto-created from contact. Source: ${form.utm_source || form.channel || 'manual'}`,
     }])
+
     setSaving(false)
-    if (error) { setError(error.message); return }
     setShowForm(false)
     setForm(emptyForm)
     setUtmUrl('')
