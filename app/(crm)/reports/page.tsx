@@ -1,11 +1,13 @@
-﻿'use client'
+'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ChevronDown } from 'lucide-react'
 
 type Contact = {
   id: string
+  full_name: string | null
+  email: string | null
   utm_source: string | null
   channel: string | null
   campaign_name: string | null
@@ -75,7 +77,7 @@ function SectionTitle({ title, sub }: { title: string; sub: string }) {
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white p-6 ${className}`}>
+    <div className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
       {children}
     </div>
   )
@@ -89,17 +91,34 @@ function LoadingRow() {
   )
 }
 
+// Build ISO week key: "2026-W20"
+function weekKey(dateStr: string) {
+  const d = new Date(dateStr)
+  const jan4 = new Date(d.getFullYear(), 0, 4)
+  const startOfWeek1 = new Date(jan4)
+  startOfWeek1.setDate(jan4.getDate() - jan4.getDay() + 1) // Monday
+  const dayDiff = Math.floor((d.getTime() - startOfWeek1.getTime()) / 86400000)
+  const week = Math.floor(dayDiff / 7) + 1
+  return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+function shortWeek(key: string) {
+  // "2026-W20" → "W20"
+  return key.split('-')[1]
+}
+
 export default function ReportsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('__all__')
 
   useEffect(() => {
     async function load() {
       const [c, d, ca, t] = await Promise.all([
-        supabase.from('users').select('id,utm_source,channel,campaign_name,status,funnel_level,lead_score,country,created_at'),
+        supabase.from('users').select('id,full_name,email,utm_source,channel,campaign_name,status,funnel_level,lead_score,country,created_at'),
         supabase.from('pipeline_deals').select('id,stage,value,channel,campaign_name'),
         supabase.from('campaigns').select('id,name,channel,status,budget,spend'),
         supabase.from('tasks').select('id,type,done,due_date'),
@@ -156,15 +175,17 @@ export default function ReportsPage() {
     count: deals.filter(d => d.stage === stage).length,
     value: deals.filter(d => d.stage === stage).reduce((s, d) => s + d.value, 0),
   }))
-  const maxStage = Math.max(...stageRows.map(r => r.count), 1)
 
-  // ── Campaign performance ───────────────────────────────────────────────────
+  // ── Campaign performance + ROI ─────────────────────────────────────────────
   const campRows = campaigns.map(c => {
-    const leads = contacts.filter(x => x.campaign_name === c.name).length
-    const converted = contacts.filter(x => x.campaign_name === c.name && x.status === 'converted').length
-    const won = deals.filter(d => d.campaign_name === c.name && d.stage === 'Won')
-    const wonValue = won.reduce((s, d) => s + d.value, 0)
+    const campContacts = contacts.filter(x => x.campaign_name === c.name)
+    const leads = campContacts.length
+    const converted = campContacts.filter(x => x.status === 'converted').length
+    const wonDeals = deals.filter(d => d.campaign_name === c.name && d.stage === 'Won')
+    const wonValue = wonDeals.reduce((s, d) => s + d.value, 0)
     const spend = c.spend ?? 0
+    const budget = c.budget ?? 0
+    const roi = spend > 0 ? Math.round(((wonValue - spend) / spend) * 100) : null
     return {
       name: c.name,
       channel: c.channel ?? '—',
@@ -174,10 +195,44 @@ export default function ReportsPage() {
       cpl: spend > 0 && leads > 0 ? Math.round(spend / leads) : 0,
       wonValue,
       spend,
-      budget: c.budget ?? 0,
-      budgetPct: c.budget ? pct(spend, c.budget) : 0,
+      budget,
+      budgetPct: budget > 0 ? pct(spend, budget) : 0,
+      roi,
     }
   }).sort((a, b) => b.leads - a.leads)
+
+  // ── Campaign ROI ranking ───────────────────────────────────────────────────
+  const roiRows = [...campRows]
+    .filter(r => r.spend > 0 || r.wonValue > 0)
+    .sort((a, b) => (b.roi ?? -Infinity) - (a.roi ?? -Infinity))
+
+  // ── Leads over time (last 10 weeks) ───────────────────────────────────────
+  const now = new Date()
+  const weeks: string[] = []
+  for (let i = 9; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i * 7)
+    weeks.push(weekKey(d.toISOString()))
+  }
+  const weekMap: Record<string, number> = {}
+  weeks.forEach(w => { weekMap[w] = 0 })
+  contacts.forEach(c => {
+    const wk = weekKey(c.created_at)
+    if (wk in weekMap) weekMap[wk]++
+  })
+  const weekData = weeks.map(w => ({ week: w, count: weekMap[w] }))
+  const maxWeekCount = Math.max(...weekData.map(w => w.count), 1)
+
+  // ── Funnel by campaign ─────────────────────────────────────────────────────
+  const campFunnelRows = campaigns.map(c => {
+    const campDeals = deals.filter(d => d.campaign_name === c.name)
+    const stageBreakdown = STAGES.map(stage => ({
+      stage,
+      count: campDeals.filter(d => d.stage === stage).length,
+    }))
+    const total = campDeals.length
+    return { name: c.name, stageBreakdown, total }
+  }).filter(r => r.total > 0)
 
   // ── Task completion ────────────────────────────────────────────────────────
   const taskTypeMap: Record<string, { done: number; total: number }> = {}
@@ -218,6 +273,7 @@ export default function ReportsPage() {
   const avgLeadScore = contacts.length > 0
     ? Math.round(contacts.reduce((s, c) => s + (c.lead_score ?? 0), 0) / contacts.length)
     : 0
+  const overallROI = totalSpend > 0 ? Math.round(((totalWonValue - totalSpend) / totalSpend) * 100) : null
 
   const summaryKpis = [
     { label: 'Total Leads', value: totalLeads, color: 'text-sky-600' },
@@ -225,8 +281,15 @@ export default function ReportsPage() {
     { label: 'Won Revenue', value: `$${totalWonValue.toLocaleString()}`, color: 'text-emerald-600' },
     { label: 'Total Spend', value: `$${totalSpend.toLocaleString()}`, color: 'text-amber-600' },
     { label: 'Avg CPL', value: overallCPL > 0 ? `$${overallCPL}` : '—', color: 'text-orange-500' },
-    { label: 'Avg Lead Score', value: avgLeadScore, color: 'text-rose-600' },
+    { label: 'Overall ROI', value: overallROI !== null ? `${overallROI > 0 ? '+' : ''}${overallROI}%` : '—', color: overallROI !== null && overallROI >= 0 ? 'text-emerald-600' : 'text-red-500' },
   ]
+
+  // ── Deep-dive contacts ─────────────────────────────────────────────────────
+  const deepDiveContacts = selectedCampaign === '__all__'
+    ? contacts
+    : contacts.filter(c => c.campaign_name === selectedCampaign)
+
+  const campaignNames = Array.from(new Set(contacts.map(c => c.campaign_name).filter(Boolean))) as string[]
 
   return (
     <div>
@@ -236,7 +299,7 @@ export default function ReportsPage() {
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {summaryKpis.map(k => (
-            <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4">
+            <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <p className="text-xs text-slate-500">{k.label}</p>
               <p className={`text-2xl font-bold mt-1 ${k.color}`}>
                 {loading ? <span className="animate-pulse bg-gray-100 rounded h-7 w-14 inline-block" /> : k.value}
@@ -245,6 +308,198 @@ export default function ReportsPage() {
           ))}
         </div>
 
+        {/* ── NEW: Leads Over Time ─────────────────────────────────────────── */}
+        <Card>
+          <SectionTitle title="Leads Over Time" sub="New leads per week — last 10 weeks" />
+          {loading ? <LoadingRow /> : (
+            <div className="flex items-end gap-2 h-36">
+              {weekData.map(w => (
+                <div key={w.week} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                  <span className="text-xs font-semibold text-slate-700">{w.count > 0 ? w.count : ''}</span>
+                  <div className="w-full bg-gray-100 rounded-t-md overflow-hidden flex flex-col justify-end" style={{ height: '96px' }}>
+                    <div
+                      className="w-full bg-orange-400 rounded-t-md transition-all"
+                      style={{ height: `${Math.max((w.count / maxWeekCount) * 100, w.count > 0 ? 8 : 0)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-400 truncate w-full text-center">{shortWeek(w.week)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* ── NEW: Campaign ROI Ranking ────────────────────────────────────── */}
+        <Card>
+          <SectionTitle title="Campaign ROI Ranking" sub="Return on investment per campaign — Won Revenue vs Spend" />
+          {loading ? <LoadingRow /> : roiRows.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">No spend data yet — add budget & spend to campaigns to see ROI.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    {['#', 'Campaign', 'Channel', 'Spend', 'Won Revenue', 'ROI %', 'Leads', 'CR%', 'CPL'].map(h => (
+                      <th key={h} className="pb-2 text-left text-xs font-medium text-slate-500 pr-4 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {roiRows.map((r, i) => {
+                    const roiColor = r.roi === null ? 'text-slate-400' : r.roi >= 100 ? 'text-emerald-600' : r.roi >= 0 ? 'text-amber-600' : 'text-red-500'
+                    const roiBg = r.roi === null ? '' : r.roi >= 100 ? 'bg-emerald-50' : r.roi >= 0 ? 'bg-amber-50' : 'bg-red-50'
+                    return (
+                      <tr key={r.name} className="hover:bg-gray-50 transition-colors">
+                        <td className="py-3 pr-4 text-xs font-bold text-slate-400">#{i + 1}</td>
+                        <td className="py-3 pr-4 text-xs font-medium text-slate-900 max-w-40 truncate">{r.name}</td>
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: channelColor[r.channel] ?? '#94a3b8' }} />
+                            <span className="text-xs text-slate-500">{r.channel}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-xs text-slate-700">{r.spend > 0 ? `$${r.spend.toLocaleString()}` : '—'}</td>
+                        <td className="py-3 pr-4 text-xs font-semibold text-emerald-600">{r.wonValue > 0 ? `$${r.wonValue.toLocaleString()}` : '—'}</td>
+                        <td className="py-3 pr-4">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${roiColor} ${roiBg}`}>
+                            {r.roi !== null ? `${r.roi >= 0 ? '+' : ''}${r.roi}%` : '—'}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-xs text-slate-700">{r.leads}</td>
+                        <td className="py-3 pr-4 text-xs font-semibold" style={{ color: r.cr >= 20 ? '#10b981' : r.cr >= 10 ? '#f97316' : '#f59e0b' }}>{r.cr}%</td>
+                        <td className="py-3 pr-4 text-xs text-slate-700">{r.cpl > 0 ? `$${r.cpl}` : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* ── NEW: Funnel by Campaign ──────────────────────────────────────── */}
+        <Card>
+          <SectionTitle title="Pipeline Funnel by Campaign" sub="Where each campaign's deals currently sit in the pipeline" />
+          {loading ? <LoadingRow /> : campFunnelRows.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">No pipeline deals linked to campaigns yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {campFunnelRows.map(row => (
+                <div key={row.name} className="space-y-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold text-slate-700 truncate max-w-xs">{row.name}</p>
+                    <span className="text-xs text-slate-400 shrink-0 ml-2">{row.total} deal{row.total !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="flex gap-0.5 h-4 rounded-full overflow-hidden">
+                    {row.stageBreakdown.filter(s => s.count > 0).map(s => (
+                      <div
+                        key={s.stage}
+                        title={`${s.stage}: ${s.count}`}
+                        className="h-full transition-all"
+                        style={{
+                          width: `${(s.count / row.total) * 100}%`,
+                          backgroundColor: stageColor[s.stage],
+                          minWidth: '4px',
+                        }}
+                      />
+                    ))}
+                    {row.total === 0 && <div className="h-full w-full bg-gray-100 rounded-full" />}
+                  </div>
+                  <div className="flex gap-3 flex-wrap mt-1">
+                    {row.stageBreakdown.filter(s => s.count > 0).map(s => (
+                      <div key={s.stage} className="flex items-center gap-1">
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: stageColor[s.stage] }} />
+                        <span className="text-xs text-slate-500">{s.stage} <span className="font-semibold text-slate-700">{s.count}</span></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* ── NEW: Campaign Deep-Dive ──────────────────────────────────────── */}
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <SectionTitle title="Campaign Deep-Dive" sub="All contacts generated by a specific campaign" />
+            <div className="relative shrink-0">
+              <select
+                value={selectedCampaign}
+                onChange={e => setSelectedCampaign(e.target.value)}
+                className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
+              >
+                <option value="__all__">All campaigns</option>
+                {campaignNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+          {loading ? <LoadingRow /> : deepDiveContacts.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">No contacts for this campaign yet.</p>
+          ) : (
+            <>
+              {/* Mini KPIs for selected campaign */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                {[
+                  { label: 'Contacts', value: deepDiveContacts.length, color: 'text-sky-600' },
+                  { label: 'Converted', value: deepDiveContacts.filter(c => c.status === 'converted').length, color: 'text-emerald-600' },
+                  { label: 'Conversion Rate', value: `${pct(deepDiveContacts.filter(c => c.status === 'converted').length, deepDiveContacts.length)}%`, color: 'text-violet-600' },
+                  { label: 'Avg Lead Score', value: deepDiveContacts.length > 0 ? Math.round(deepDiveContacts.reduce((s, c) => s + (c.lead_score ?? 0), 0) / deepDiveContacts.length) : 0, color: 'text-orange-500' },
+                ].map(k => (
+                  <div key={k.label} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-center">
+                    <p className="text-xs text-slate-500">{k.label}</p>
+                    <p className={`text-xl font-bold mt-0.5 ${k.color}`}>{k.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      {['Name', 'Email', 'Status', 'Funnel Level', 'Lead Score', 'Channel', 'Date'].map(h => (
+                        <th key={h} className="pb-2 text-left text-xs font-medium text-slate-500 pr-4 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {deepDiveContacts.slice(0, 50).map(c => (
+                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="py-2.5 pr-4 text-xs font-medium text-slate-900">{c.full_name ?? '—'}</td>
+                        <td className="py-2.5 pr-4 text-xs text-slate-500">{c.email ?? '—'}</td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            c.status === 'converted' ? 'bg-emerald-100 text-emerald-700' :
+                            c.status === 'active' ? 'bg-sky-100 text-sky-700' :
+                            c.status === 'lead' ? 'bg-amber-100 text-amber-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>{c.status ?? 'lead'}</span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-xs text-slate-500">{c.funnel_level ?? '—'}</td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`text-xs font-bold ${(c.lead_score ?? 0) >= 70 ? 'text-emerald-600' : (c.lead_score ?? 0) >= 40 ? 'text-amber-600' : 'text-slate-400'}`}>
+                            {c.lead_score ?? 0}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-xs text-slate-500">{c.channel ?? c.utm_source ?? '—'}</td>
+                        <td className="py-2.5 pr-4 text-xs text-slate-400 whitespace-nowrap">
+                          {new Date(c.created_at).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {deepDiveContacts.length > 50 && (
+                  <p className="text-xs text-slate-400 text-center pt-3">Showing first 50 of {deepDiveContacts.length} contacts</p>
+                )}
+              </div>
+            </>
+          )}
+        </Card>
+
+        {/* Existing sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Leads by Channel */}
@@ -300,7 +555,7 @@ export default function ReportsPage() {
           {loading ? <LoadingRow /> : (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
               {stageRows.map(r => (
-                <div key={r.stage} className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                <div key={r.stage} className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-center">
                   <div className="h-2 w-2 rounded-full mx-auto mb-2" style={{ backgroundColor: stageColor[r.stage] }} />
                   <p className="text-xs text-slate-500 mb-1">{r.stage}</p>
                   <p className="text-2xl font-bold" style={{ color: stageColor[r.stage] }}>{r.count}</p>
@@ -324,7 +579,7 @@ export default function ReportsPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#333]">
+                <tbody className="divide-y divide-gray-50">
                   {campRows.map(r => (
                     <tr key={r.name} className="hover:bg-gray-50 transition-colors">
                       <td className="py-3 pr-4 text-xs font-medium text-slate-900 max-w-40 truncate">{r.name}</td>
@@ -336,8 +591,8 @@ export default function ReportsPage() {
                       </td>
                       <td className="py-3 pr-4">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          r.status === 'active' || r.status === 'Active' ? 'bg-emerald-500/15 text-emerald-600' :
-                          r.status === 'paused' || r.status === 'Paused' ? 'bg-amber-500/15 text-amber-600' :
+                          r.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                          r.status === 'paused' ? 'bg-amber-100 text-amber-700' :
                           'bg-slate-100 text-slate-500'
                         }`}>{r.status}</span>
                       </td>
@@ -385,7 +640,7 @@ export default function ReportsPage() {
                   <div key={b.label} className="flex items-center gap-3">
                     <div className="w-14 text-xs text-slate-500 shrink-0">{b.label}</div>
                     <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-orange-500 rounded-full opacity-75" style={{ width: `${Math.max((b.count / maxScore) * 100, b.count > 0 ? 4 : 0)}%` }} />
+                      <div className="h-full bg-orange-400 rounded-full opacity-80" style={{ width: `${Math.max((b.count / maxScore) * 100, b.count > 0 ? 4 : 0)}%` }} />
                     </div>
                     <span className="w-5 text-xs font-semibold text-slate-700 text-right">{b.count}</span>
                   </div>
@@ -425,7 +680,7 @@ export default function ReportsPage() {
                   <div key={r.type} className="flex items-center gap-3">
                     <div className="w-20 text-xs text-slate-500 shrink-0">{r.type}</div>
                     <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full opacity-75" style={{ width: `${Math.max(r.cr, r.total > 0 ? 4 : 0)}%` }} />
+                      <div className="h-full bg-emerald-400 rounded-full opacity-80" style={{ width: `${Math.max(r.cr, r.total > 0 ? 4 : 0)}%` }} />
                     </div>
                     <span className="w-14 text-xs text-slate-500 text-right">{r.done}/{r.total}</span>
                   </div>
@@ -439,4 +694,3 @@ export default function ReportsPage() {
     </div>
   )
 }
-
