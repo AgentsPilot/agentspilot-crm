@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
@@ -160,7 +160,7 @@ export default function UsersPage() {
       <div className="p-6 space-y-6">
 
         {error && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400 flex items-center justify-between">
+          <div className="rounded-lg bg-red-50 border border-red-500/20 px-4 py-3 text-sm text-red-600 flex items-center justify-between">
             {error}
             <button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
           </div>
@@ -170,14 +170,14 @@ export default function UsersPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: 'Total Contacts', value: summary.total, color: 'text-white' },
-            { label: 'Active', value: summary.active, color: 'text-emerald-400' },
-            { label: 'Converted', value: summary.converted, color: 'text-orange-400' },
-            { label: 'Leads', value: summary.leads, color: 'text-amber-400' },
+            { label: 'Active', value: summary.active, color: 'text-emerald-600' },
+            { label: 'Converted', value: summary.converted, color: 'text-orange-500' },
+            { label: 'Leads', value: summary.leads, color: 'text-amber-600' },
           ].map(s => (
-            <div key={s.label} className="rounded-xl border border-[#222] bg-[#1a1a1a] p-4">
-              <p className="text-xs text-zinc-500">{s.label}</p>
+            <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4">
+              <p className="text-xs text-slate-500">{s.label}</p>
               <p className={`text-2xl font-bold mt-1 ${s.color}`}>
-                {loading ? <span className="animate-pulse bg-zinc-800 rounded h-7 w-10 inline-block" /> : s.value}
+                {loading ? <span className="animate-pulse bg-gray-100 rounded h-7 w-10 inline-block" /> : s.value}
               </p>
             </div>
           ))}
@@ -186,22 +186,22 @@ export default function UsersPage() {
         {/* Filters + Add */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <input type="text" placeholder="Search name, email or campaign..."
               value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-9 pr-4 py-2 w-full text-sm border border-[#333] rounded-lg bg-[#1a1a1a] text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500" />
           </div>
-          <Filter className="h-4 w-4 text-zinc-500" />
+          <Filter className="h-4 w-4 text-slate-500" />
           <select value={channelFilter} onChange={e => setChannelFilter(e.target.value)}
-            className="text-sm border border-[#333] rounded-lg px-3 py-2 bg-[#1a1a1a] text-zinc-300">
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-slate-700">
             {['All', 'Meta', 'Google', 'TikTok', 'LinkedIn', 'Organic', 'Email', 'Other'].map(c => <option key={c}>{c}</option>)}
           </select>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            className="text-sm border border-[#333] rounded-lg px-3 py-2 bg-[#1a1a1a] text-zinc-300">
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-slate-700">
             {['All', 'lead', 'active', 'converted', 'inactive'].map(s => <option key={s}>{s}</option>)}
           </select>
           <button onClick={() => setShowForm(v => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-slate-900 text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
             <Plus className="h-4 w-4" /> Add Contact
           </button>
         </div>
@@ -249,7 +249,7 @@ export default function UsersPage() {
                       className="pl-9 pr-4 py-2 w-full text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700" />
                   </div>
                   <button type="button" onClick={() => parseUtmFromUrl(utmUrl, setForm)}
-                    className="px-4 py-2 text-sm font-medium bg-slate-800 text-white rounded-lg hover:bg-slate-700">
+                    className="px-4 py-2 text-sm font-medium bg-slate-800 text-slate-900 rounded-lg hover:bg-slate-700">
                     Parse
                   </button>
                 </div>
@@ -289,7 +289,7 @@ export default function UsersPage() {
                   Cancel
                 </button>
                 <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-slate-900 rounded-lg hover:bg-orange-600 disabled:opacity-50">
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {saving ? 'Saving...' : 'Save Contact'}
                 </button>
@@ -299,56 +299,56 @@ export default function UsersPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center py-20 gap-2 text-zinc-500">
+            <div className="flex items-center justify-center py-20 gap-2 text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading contacts...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20 text-zinc-600">
+            <div className="text-center py-20 text-slate-400">
               {users.length === 0
-                ? <p>No contacts yet — click <strong className="text-zinc-400">Add Contact</strong> to add your first one.</p>
+                ? <p>No contacts yet — click <strong className="text-slate-500">Add Contact</strong> to add your first one.</p>
                 : 'No contacts match your filters.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-[#111] border-b border-[#222]">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     {['Name', 'Status', 'Level', 'Channel', 'Campaign', 'UTM Source', 'Country', 'Date', 'Score', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#222]">
+                <tbody className="divide-y divide-gray-100">
                   {filtered.map(user => (
                     <>
-                      <tr key={user.id} className="hover:bg-[#222] transition-colors cursor-pointer"
+                      <tr key={user.id} className="hover:bg-gray-50 transition-colors cursor-pointer"
                         onClick={() => setExpandedRow(expandedRow === user.id ? null : user.id)}>
                         <td className="px-4 py-3">
-                          <p className="font-medium text-white">{user.full_name}</p>
-                          <p className="text-xs text-zinc-500">{user.email}</p>
+                          <p className="font-medium text-slate-900">{user.full_name}</p>
+                          <p className="text-xs text-slate-500">{user.email}</p>
                         </td>
                         <td className="px-4 py-3"><Badge label={user.status} variant={statusVariant[user.status]} /></td>
                         <td className="px-4 py-3"><Badge label={user.funnel_level} variant={levelVariant[user.funnel_level]} /></td>
-                        <td className="px-4 py-3 text-zinc-300">{user.channel ?? '—'}</td>
-                        <td className="px-4 py-3 text-zinc-500 text-xs max-w-32 truncate">{user.campaign_name ?? '—'}</td>
-                        <td className="px-4 py-3 text-zinc-500 text-xs">{user.utm_source ?? '—'}</td>
-                        <td className="px-4 py-3 text-zinc-500">{user.country ?? '—'}</td>
-                        <td className="px-4 py-3 text-zinc-500 text-xs whitespace-nowrap">
+                        <td className="px-4 py-3 text-slate-700">{user.channel ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs max-w-32 truncate">{user.campaign_name ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs">{user.utm_source ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500">{user.country ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
                           {new Date(user.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`font-bold text-sm ${user.lead_score >= 70 ? 'text-emerald-400' : user.lead_score >= 40 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                          <span className={`font-bold text-sm ${user.lead_score >= 70 ? 'text-emerald-600' : user.lead_score >= 40 ? 'text-amber-600' : 'text-slate-400'}`}>
                             {user.lead_score}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-zinc-600">
+                        <td className="px-4 py-3 text-slate-400">
                           {expandedRow === user.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </td>
                       </tr>
                       {expandedRow === user.id && (
-                        <tr key={user.id + '-exp'} className="bg-[#111]">
+                        <tr key={user.id + '-exp'} className="bg-gray-50">
                           <td colSpan={10} className="px-6 py-4">
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs">
                               {[
@@ -364,14 +364,14 @@ export default function UsersPage() {
                                 { label: 'Last Active', value: new Date(user.last_active_at).toLocaleDateString() },
                               ].map(f => (
                                 <div key={f.label}>
-                                  <p className="text-zinc-600 font-medium">{f.label}</p>
-                                  <p className="text-zinc-300 mt-0.5">{f.value ?? '—'}</p>
+                                  <p className="text-slate-400 font-medium">{f.label}</p>
+                                  <p className="text-slate-700 mt-0.5">{f.value ?? '—'}</p>
                                 </div>
                               ))}
                               {user.notes && (
                                 <div className="col-span-2 md:col-span-5">
-                                  <p className="text-zinc-600 font-medium">Notes</p>
-                                  <p className="text-zinc-300 mt-0.5">{user.notes}</p>
+                                  <p className="text-slate-400 font-medium">Notes</p>
+                                  <p className="text-slate-700 mt-0.5">{user.notes}</p>
                                 </div>
                               )}
                             </div>
@@ -384,7 +384,7 @@ export default function UsersPage() {
               </table>
             </div>
           )}
-          <div className="border-t border-[#222] px-4 py-3 text-xs text-zinc-600">
+          <div className="border-t border-gray-100 px-4 py-3 text-xs text-slate-400">
             {loading ? 'Loading...' : `Showing ${filtered.length} of ${users.length} contacts`}
           </div>
         </div>
@@ -393,3 +393,4 @@ export default function UsersPage() {
     </div>
   )
 }
+

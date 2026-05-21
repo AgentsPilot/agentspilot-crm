@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
@@ -94,7 +94,7 @@ const statusIcon = {
   failed: <AlertCircle className="h-3.5 w-3.5 text-red-500" />,
 }
 const statusLabel = { sent: 'Sent', queued: 'Queued', failed: 'Failed' }
-const statusColor = { sent: 'text-emerald-400', queued: 'text-amber-400', failed: 'text-red-400' }
+const statusColor = { sent: 'text-emerald-600', queued: 'text-amber-600', failed: 'text-red-600' }
 
 export default function EmailsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -189,33 +189,33 @@ export default function EmailsPage() {
       <div className="p-6 space-y-6">
 
         {/* Setup notice if no Resend key */}
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
-          <strong>Setup:</strong> To send real emails, add <code className="bg-amber-500/20 px-1 rounded">RESEND_API_KEY</code> and <code className="bg-amber-500/20 px-1 rounded">RESEND_FROM_EMAIL</code> to your <code className="bg-amber-500/20 px-1 rounded">.env.local</code>. Until then, emails are saved as <strong>queued</strong>.
+        <div className="rounded-xl border border-amber-500/20 bg-amber-50 px-4 py-3 text-sm text-amber-600">
+          <strong>Setup:</strong> To send real emails, add <code className="bg-amber-100 px-1 rounded">RESEND_API_KEY</code> and <code className="bg-amber-100 px-1 rounded">RESEND_FROM_EMAIL</code> to your <code className="bg-amber-100 px-1 rounded">.env.local</code>. Until then, emails are saved as <strong>queued</strong>.
         </div>
 
         {/* Summary */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Sent', value: sentCount, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-            { label: 'Queued', value: queuedCount, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-            { label: 'Failed', value: failedCount, color: 'text-red-400', bg: 'bg-red-500/10' },
+            { label: 'Sent', value: sentCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Queued', value: queuedCount, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { label: 'Failed', value: failedCount, color: 'text-red-600', bg: 'bg-red-50' },
           ].map(s => (
-            <div key={s.label} className={`rounded-xl border border-[#222] ${s.bg} p-4`}>
-              <p className="text-xs text-zinc-500">{s.label}</p>
+            <div key={s.label} className={`rounded-xl border border-gray-200 ${s.bg} p-4`}>
+              <p className="text-xs text-slate-500">{s.label}</p>
               <p className={`text-2xl font-bold mt-1 ${s.color}`}>
-                {loading ? <span className="animate-pulse bg-zinc-800 rounded h-7 w-8 inline-block" /> : s.value}
+                {loading ? <span className="animate-pulse bg-gray-100 rounded h-7 w-8 inline-block" /> : s.value}
               </p>
             </div>
           ))}
         </div>
 
         {error && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400 flex justify-between">
+          <div className="rounded-lg bg-red-50 border border-red-500/20 px-4 py-3 text-sm text-red-600 flex justify-between">
             {error}<button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
           </div>
         )}
         {success && (
-          <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400 flex justify-between">
+          <div className="rounded-lg bg-emerald-50 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-600 flex justify-between">
             {success}<button onClick={() => setSuccess(null)}><X className="h-4 w-4" /></button>
           </div>
         )}
@@ -259,7 +259,7 @@ export default function EmailsPage() {
                   <Mail className="h-3.5 w-3.5 text-orange-500 shrink-0" />
                   <span className="text-xs text-orange-700">{form.to_name} — {form.to_email}</span>
                   <button type="button" onClick={() => { setForm(f => ({ ...f, to_email: '', to_name: '' })); setContactSearch('') }}
-                    className="ml-auto"><X className="h-3 w-3 text-orange-400" /></button>
+                    className="ml-auto"><X className="h-3 w-3 text-orange-500" /></button>
                 </div>
               )}
 
@@ -278,77 +278,77 @@ export default function EmailsPage() {
               </div>
 
               <button type="submit" disabled={sending || !form.to_email}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors">
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-orange-500 text-slate-900 text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors">
                 {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><Send className="h-4 w-4" /> Send Email</>}
               </button>
             </form>
           </div>
 
           {/* Templates — dark */}
-          <div className="rounded-xl border border-[#222] bg-[#1a1a1a] p-6">
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
             <div className="flex items-center gap-2 mb-4">
               <FileText className="h-4 w-4 text-orange-500" />
-              <h2 className="text-sm font-semibold text-white">Email Templates</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Email Templates</h2>
             </div>
             <div className="space-y-2">
               {TEMPLATES.map(t => (
                 <div key={t.name}
                   className={`p-3 rounded-lg border transition-all cursor-pointer ${
                     selectedTemplate === t.name
-                      ? 'border-orange-500/40 bg-orange-500/10'
-                      : 'border-[#333] hover:bg-[#222]'
+                      ? 'border-orange-500/40 bg-orange-50'
+                      : 'border-gray-200 hover:bg-gray-50'
                   }`}
                   onClick={() => applyTemplate(t)}>
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-white">{t.name}</p>
+                    <p className="text-sm font-medium text-slate-900">{t.name}</p>
                     <div className="flex gap-1">
                       {t.tags.map(tag => (
-                        <span key={tag} className="text-xs bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded-full">{tag}</span>
+                        <span key={tag} className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full">{tag}</span>
                       ))}
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-500">{t.subject}</p>
+                  <p className="text-xs text-slate-500">{t.subject}</p>
                   {selectedTemplate === t.name && (
-                    <p className="text-xs text-orange-400 mt-1 font-medium">✓ Applied to compose</p>
+                    <p className="text-xs text-orange-500 mt-1 font-medium">✓ Applied to compose</p>
                   )}
                 </div>
               ))}
             </div>
-            <p className="text-xs text-zinc-600 mt-3">Click a template to load it into the composer. <code className="bg-zinc-800 text-zinc-400 px-1 rounded">{'{{name}}'}</code> is auto-replaced.</p>
+            <p className="text-xs text-slate-400 mt-3">Click a template to load it into the composer. <code className="bg-gray-100 text-slate-500 px-1 rounded">{'{{name}}'}</code> is auto-replaced.</p>
           </div>
         </div>
 
         {/* Sent history */}
-        <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
-          <div className="px-5 py-4 border-b border-[#222] flex items-center gap-2">
-            <Mail className="h-4 w-4 text-zinc-500" />
-            <h2 className="text-sm font-semibold text-white">Email History</h2>
-            <span className="ml-auto text-xs text-zinc-600">{sentEmails.length} emails</span>
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+            <Mail className="h-4 w-4 text-slate-500" />
+            <h2 className="text-sm font-semibold text-slate-900">Email History</h2>
+            <span className="ml-auto text-xs text-slate-400">{sentEmails.length} emails</span>
           </div>
           {loading ? (
-            <div className="flex items-center justify-center py-10 gap-2 text-zinc-600">
+            <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading...
             </div>
           ) : sentEmails.length === 0 ? (
-            <div className="text-center py-10 text-zinc-600 text-sm">No emails sent yet.</div>
+            <div className="text-center py-10 text-slate-400 text-sm">No emails sent yet.</div>
           ) : (
-            <div className="divide-y divide-[#222]">
+            <div className="divide-y divide-gray-50">
               {sentEmails.map(e => (
-                <div key={e.id} className="flex items-center justify-between px-5 py-3 hover:bg-[#222] transition-colors cursor-pointer"
+                <div key={e.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => setPreviewEmail(e)}>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-white truncate">{e.subject}</p>
-                    <p className="text-xs text-zinc-500">{e.to_name ? `${e.to_name} — ` : ''}{e.to_email}</p>
+                    <p className="text-sm font-medium text-slate-900 truncate">{e.subject}</p>
+                    <p className="text-xs text-slate-500">{e.to_name ? `${e.to_name} — ` : ''}{e.to_email}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0 ml-4">
                     {e.template_name && (
-                      <span className="text-xs text-zinc-600 hidden md:block">{e.template_name}</span>
+                      <span className="text-xs text-slate-400 hidden md:block">{e.template_name}</span>
                     )}
                     <div className={`flex items-center gap-1 text-xs font-medium ${statusColor[e.status]}`}>
                       {statusIcon[e.status]}
                       {statusLabel[e.status]}
                     </div>
-                    <span className="text-xs text-zinc-600">{new Date(e.created_at).toLocaleDateString()}</span>
+                    <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               ))}
@@ -384,3 +384,4 @@ export default function EmailsPage() {
     </div>
   )
 }
+
