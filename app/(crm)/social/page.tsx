@@ -20,6 +20,13 @@ type SocialPost = {
 
 type TabId = 'calendar' | 'platform' | 'create'
 
+type SocialConnection = {
+  id: string
+  platform: string
+  platform_username: string
+  expires_at: string | null
+}
+
 // ── Google Sheet templates ─────────────────────────────────────────────────
 const TEMPLATES = [
   {
@@ -138,6 +145,9 @@ export default function SocialPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [editingPost, setEditingPost] = useState<SocialPost | null>(null)
+  const [connections, setConnections] = useState<SocialConnection[]>([])
+  const [publishing, setPublishing] = useState<string | null>(null)
+  const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; message: string }> | null>(null)
   const [aiBrief, setAiBrief] = useState('')
   const [aiPlatform, setAiPlatform] = useState('LinkedIn')
   const [aiTone, setAiTone] = useState('Professional')
@@ -158,7 +168,52 @@ export default function SocialPage() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchPosts() }, [])
+  async function fetchConnections() {
+    const { data } = await supabase.from('social_connections').select('*')
+    setConnections(data ?? [])
+  }
+
+  useEffect(() => {
+    fetchPosts()
+    fetchConnections()
+    // Handle OAuth redirect params
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connected')) {
+      setSuccess(`${params.get('connected')} connected successfully!`)
+      window.history.replaceState({}, '', '/social')
+      fetchConnections()
+    }
+    if (params.get('error')) {
+      setError(`Connection failed: ${params.get('error')}`)
+      window.history.replaceState({}, '', '/social')
+    }
+  }, [])
+
+  async function publishPost(post: SocialPost) {
+    setPublishing(post.id)
+    setPublishResults(null)
+    try {
+      const res = await fetch('/api/social/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: post.id }),
+      })
+      const data = await res.json()
+      setPublishResults(data.results)
+      fetchPosts()
+    } catch {
+      setError('Failed to publish post')
+    }
+    setPublishing(null)
+  }
+
+  function isConnected(platform: string) {
+    return connections.some(c => c.platform === platform.toLowerCase())
+  }
+
+  function getConnection(platform: string) {
+    return connections.find(c => c.platform === platform.toLowerCase())
+  }
 
   function applyTemplate(t: typeof TEMPLATES[0]) {
     setForm(f => ({
@@ -332,6 +387,63 @@ export default function SocialPage() {
 
       <div className="p-6 space-y-6">
 
+        {/* Connected Accounts */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">Connected Accounts</h3>
+            <span className="text-xs text-slate-400">{connections.length} connected</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {/* LinkedIn */}
+            {isConnected('linkedin') ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
+                <div className="h-6 w-6 rounded bg-blue-600 flex items-center justify-center text-white text-xs font-bold">in</div>
+                <div>
+                  <p className="text-xs font-medium text-blue-800">LinkedIn</p>
+                  <p className="text-xs text-blue-500">{getConnection('linkedin')?.platform_username}</p>
+                </div>
+                <Check className="h-3.5 w-3.5 text-emerald-500 ml-1" />
+              </div>
+            ) : (
+              <a href="/api/auth/linkedin"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-blue-300 hover:bg-blue-50 transition-colors cursor-pointer">
+                <div className="h-6 w-6 rounded bg-blue-600 flex items-center justify-center text-white text-xs font-bold">in</div>
+                <div>
+                  <p className="text-xs font-medium text-slate-700">LinkedIn</p>
+                  <p className="text-xs text-blue-500 font-medium">Connect →</p>
+                </div>
+              </a>
+            )}
+            {/* Coming soon platforms */}
+            {[
+              { label: 'Facebook', icon: 'f', color: 'bg-indigo-600' },
+              { label: 'Instagram', icon: 'ig', color: 'bg-pink-500' },
+            ].map(p => (
+              <div key={p.label} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-200 opacity-50 cursor-not-allowed">
+                <div className={`h-6 w-6 rounded ${p.color} flex items-center justify-center text-white text-xs font-bold`}>{p.icon}</div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">{p.label}</p>
+                  <p className="text-xs text-slate-400">Coming soon</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Publish results banner */}
+        {publishResults && (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+            <p className="text-xs font-semibold text-slate-700 mb-2">Publish Results</p>
+            {Object.entries(publishResults).map(([platform, result]) => (
+              <div key={platform} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${result.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                {result.success ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                <span className="font-medium">{platform}:</span> {result.message}
+              </div>
+            ))}
+            <button onClick={() => setPublishResults(null)} className="text-xs text-slate-400 hover:text-slate-600">Dismiss</button>
+          </div>
+        )}
+
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
@@ -477,6 +589,17 @@ export default function SocialPage() {
                             <option value="scheduled">Scheduled</option>
                             <option value="published">Published</option>
                           </select>
+                          {post.status !== 'published' && (
+                            <button
+                              onClick={() => publishPost(post)}
+                              disabled={publishing === post.id}
+                              className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                              {publishing === post.id
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <><span className="text-xs font-bold">in</span> Publish</>
+                              }
+                            </button>
+                          )}
                           <button onClick={() => startEdit(post)} className="text-slate-400 hover:text-orange-500 transition-colors">
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
