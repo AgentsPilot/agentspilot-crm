@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check } from 'lucide-react'
+import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check, Sparkles, RefreshCw } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SocialPost = {
@@ -138,6 +138,11 @@ export default function SocialPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [editingPost, setEditingPost] = useState<SocialPost | null>(null)
+  const [aiBrief, setAiBrief] = useState('')
+  const [aiPlatform, setAiPlatform] = useState('LinkedIn')
+  const [aiTone, setAiTone] = useState('Professional')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const now = new Date()
   const [calYear, setCalYear] = useState(now.getFullYear())
@@ -203,6 +208,35 @@ export default function SocialPage() {
   async function updateStatus(id: string, status: SocialPost['status']) {
     await supabase.from('social_posts').update({ status }).eq('id', id)
     fetchPosts()
+  }
+
+  async function generateWithAI() {
+    if (!aiBrief.trim()) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const res = await fetch('/api/generate-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief: aiBrief,
+          platform: aiPlatform,
+          tone: aiTone,
+          collateral: form.collateral,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to generate')
+      setForm(f => ({
+        ...f,
+        caption: data.caption,
+        cta: data.cta || f.cta,
+        platforms: f.platforms.length > 0 ? f.platforms : [aiPlatform],
+      }))
+    } catch (err: unknown) {
+      setAiError(err instanceof Error ? err.message : 'Generation failed')
+    }
+    setAiLoading(false)
   }
 
   function startEdit(post: SocialPost) {
@@ -579,10 +613,71 @@ export default function SocialPage() {
                       className={`${inputCls} resize-none`} />
                   </div>
 
+                  {/* ── AI Generator ──────────────────────────────────────── */}
+                  <div className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-orange-500" />
+                      <h4 className="text-sm font-semibold text-slate-800">Generate Caption with AI</h4>
+                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">Claude</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-slate-500">What should this post be about?</label>
+                      <textarea
+                        rows={2}
+                        value={aiBrief}
+                        onChange={e => setAiBrief(e.target.value)}
+                        placeholder="e.g. Announcing our new AI lead scoring feature that cuts pipeline review time in half"
+                        className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700 resize-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-slate-500">Platform</label>
+                        <select
+                          value={aiPlatform}
+                          onChange={e => setAiPlatform(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700">
+                          {['LinkedIn', 'Facebook', 'Instagram', 'TikTok', 'Website'].map(p => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs font-medium text-slate-500">Tone</label>
+                        <select
+                          value={aiTone}
+                          onChange={e => setAiTone(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700">
+                          {['Professional', 'Casual', 'Bold', 'Inspirational'].map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {aiError && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{aiError}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={generateWithAI}
+                      disabled={aiLoading || !aiBrief.trim()}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors w-full justify-center">
+                      {aiLoading
+                        ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+                        : <><Sparkles className="h-3.5 w-3.5" /> Generate Caption &amp; CTA</>
+                      }
+                    </button>
+                    {form.caption && !aiLoading && (
+                      <p className="text-xs text-emerald-600 flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Caption applied below — edit as needed
+                      </p>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-slate-500">Post Caption <span className="text-red-500">*</span></label>
                     <textarea required rows={5} value={form.caption} onChange={e => setForm(f => ({ ...f, caption: e.target.value }))}
-                      placeholder="Write the final caption text here..."
+                      placeholder="Write the final caption text here, or generate with AI above..."
                       className={`${inputCls} resize-none font-mono text-xs`} />
                     <p className="text-xs text-slate-400">{form.caption.length} chars</p>
                   </div>
