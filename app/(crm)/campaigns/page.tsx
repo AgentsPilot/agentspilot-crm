@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Megaphone, TrendingUp, DollarSign, Users, Pencil, Eye, ChevronDown } from 'lucide-react'
+import { Plus, X, Loader2, Megaphone, TrendingUp, DollarSign, Users, Pencil, Eye, Copy, Check } from 'lucide-react'
 
 type Campaign = {
   id: string
@@ -65,6 +65,25 @@ export default function CampaignsPage() {
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const BASE_URL = typeof window !== 'undefined'
+    ? `${window.location.origin}/landing`
+    : '/landing'
+
+  function buildUtmUrl(c: Campaign) {
+    const params = new URLSearchParams()
+    if (c.utm_source) params.set('utm_source', c.utm_source)
+    if (c.utm_medium) params.set('utm_medium', c.utm_medium)
+    if (c.utm_campaign) params.set('utm_campaign', c.utm_campaign)
+    return `${BASE_URL}?${params.toString()}`
+  }
+
+  function copyUrl(c: Campaign) {
+    navigator.clipboard.writeText(buildUtmUrl(c))
+    setCopiedId(c.id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
 
   async function fetchCampaigns() {
     setLoading(true)
@@ -365,6 +384,20 @@ export default function CampaignsPage() {
                     {viewCampaign.utm_campaign && <p className="text-xs text-slate-600"><span className="text-slate-400">campaign:</span> {viewCampaign.utm_campaign}</p>}
                   </div>
                 )}
+
+                {/* UTM Tracking URL */}
+                {viewCampaign.utm_source && (
+                  <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
+                    <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2">📋 Tracking URL — paste this into LinkedIn</p>
+                    <p className="text-xs text-indigo-700 break-all font-mono mb-2">{buildUtmUrl(viewCampaign)}</p>
+                    <button onClick={() => copyUrl(viewCampaign)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+                      {copiedId === viewCampaign.id
+                        ? <><Check className="h-3.5 w-3.5 text-emerald-500" /> Copied!</>
+                        : <><Copy className="h-3.5 w-3.5" /> Copy link</>}
+                    </button>
+                  </div>
+                )}
                 {viewCampaign.notes && (
                   <div>
                     <p className="text-xs text-slate-400">Notes</p>
@@ -439,6 +472,9 @@ export default function CampaignsPage() {
                           </button>
                           <button onClick={() => openEdit(c)} className="text-slate-300 hover:text-amber-400 transition-colors" title="Edit">
                             <Pencil className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => copyUrl(c)} className="text-slate-300 hover:text-emerald-400 transition-colors" title="Copy UTM link">
+                            {copiedId === c.id ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
                           </button>
                           <button onClick={() => deleteCampaign(c.id)} className="text-slate-300 hover:text-red-400 transition-colors" title="Delete">
                             <X className="h-4 w-4" />
