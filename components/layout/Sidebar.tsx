@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, CheckSquare,
-  Megaphone, Mail, BarChart2, Settings, ChevronRight,
+  Megaphone, Mail, BarChart2, Settings, ChevronRight, Bell,
 } from 'lucide-react'
 
 const nav = [
@@ -14,6 +14,7 @@ const nav = [
       { label: 'Contacts', href: '/contacts', icon: Users },
       { label: 'Pipeline', href: '/pipeline', icon: GitBranch },
       { label: 'Tasks', href: '/tasks', icon: CheckSquare },
+      { label: 'Alarms', href: '/alarms', icon: Bell },
     ],
   },
   {
