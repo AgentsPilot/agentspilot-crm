@@ -9,10 +9,12 @@ type SentEmail = {
   id: string
   to_email: string
   to_name: string | null
+  contact_name: string | null
   subject: string
   body: string
   template_name: string | null
-  status: 'sent' | 'queued' | 'failed'
+  status: 'sent' | 'queued' | 'failed' | 'draft'
+  task_id: string | null
   created_at: string
 }
 
@@ -179,9 +181,29 @@ export default function EmailsPage() {
     (c.email ?? '').toLowerCase().includes(contactSearch.toLowerCase())
   ).slice(0, 8)
 
+  const draftEmails = sentEmails.filter(e => e.status === 'draft')
   const sentCount = sentEmails.filter(e => e.status === 'sent').length
   const queuedCount = sentEmails.filter(e => e.status === 'queued').length
   const failedCount = sentEmails.filter(e => e.status === 'failed').length
+  const draftCount = draftEmails.length
+
+  function openDraft(draft: SentEmail) {
+    setForm({
+      to_email: draft.to_email ?? '',
+      to_name: draft.to_name ?? draft.contact_name ?? '',
+      subject: draft.subject,
+      body: draft.body,
+    })
+    setContactSearch(draft.to_name ?? draft.contact_name ?? '')
+    setSelectedTemplate(draft.template_name)
+    // scroll to compose
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function deleteDraft(id: string) {
+    await supabase.from('emails').delete().eq('id', id)
+    fetchEmails()
+  }
 
   return (
     <div>
@@ -194,8 +216,9 @@ export default function EmailsPage() {
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
+            { label: 'Drafts', value: draftCount, color: 'text-sky-600', bg: 'bg-sky-50' },
             { label: 'Sent', value: sentCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
             { label: 'Queued', value: queuedCount, color: 'text-amber-600', bg: 'bg-amber-50' },
             { label: 'Failed', value: failedCount, color: 'text-red-600', bg: 'bg-red-50' },
@@ -318,22 +341,60 @@ export default function EmailsPage() {
           </div>
         </div>
 
+        {/* Drafts */}
+        {draftEmails.length > 0 && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50/40 overflow-hidden">
+            <div className="px-5 py-4 border-b border-sky-100 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-sky-500" />
+              <h2 className="text-sm font-semibold text-slate-900">Email Drafts</h2>
+              <span className="text-xs bg-sky-100 text-sky-600 px-2 py-0.5 rounded-full font-medium">{draftCount} pending</span>
+              <span className="ml-auto text-xs text-slate-400">Created from Email tasks — click to open in composer</span>
+            </div>
+            <div className="divide-y divide-sky-100">
+              {draftEmails.map(draft => (
+                <div key={draft.id} className="flex items-center gap-4 px-5 py-3 hover:bg-sky-50 transition-colors">
+                  <div className="h-8 w-8 rounded-full bg-sky-100 flex items-center justify-center shrink-0">
+                    <Mail className="h-4 w-4 text-sky-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">{draft.subject}</p>
+                    <p className="text-xs text-slate-500">
+                      To: <span className="font-medium">{draft.to_name || draft.contact_name || 'Unknown'}</span>
+                      {draft.to_email && <span className="text-slate-400"> — {draft.to_email}</span>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-slate-400">{new Date(draft.created_at).toLocaleDateString()}</span>
+                    <button onClick={() => openDraft(draft)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors">
+                      <Send className="h-3.5 w-3.5" /> Open to Send
+                    </button>
+                    <button onClick={() => deleteDraft(draft.id)} className="text-slate-400 hover:text-red-500 transition-colors">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Sent history */}
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
             <Mail className="h-4 w-4 text-slate-500" />
             <h2 className="text-sm font-semibold text-slate-900">Email History</h2>
-            <span className="ml-auto text-xs text-slate-400">{sentEmails.length} emails</span>
+            <span className="ml-auto text-xs text-slate-400">{sentEmails.filter(e => e.status !== 'draft').length} emails</span>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading...
             </div>
-          ) : sentEmails.length === 0 ? (
+          ) : sentEmails.filter(e => e.status !== 'draft').length === 0 ? (
             <div className="text-center py-10 text-slate-400 text-sm">No emails sent yet.</div>
           ) : (
             <div className="divide-y divide-gray-50">
-              {sentEmails.map(e => (
+              {sentEmails.filter(e => e.status !== 'draft').map(e => (
                 <div key={e.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => setPreviewEmail(e)}>
                   <div className="min-w-0 flex-1">

@@ -11,7 +11,7 @@ type Task = {
   contact_id: string | null
   contact_name: string | null
   deal_id: string | null
-  type: 'Call' | 'Email' | 'Follow-up' | 'Meeting' | 'Other'
+  type: 'Call' | 'Email' | 'Follow-up' | 'Meeting' | 'LinkedIn' | 'WhatsApp' | 'Demo' | 'Proposal' | 'Other'
   priority: 'High' | 'Medium' | 'Low'
   due_date: string | null
   done: boolean
@@ -21,8 +21,13 @@ type Task = {
   created_at: string
 }
 
+const TASK_TYPES = ['Call', 'Email', 'Follow-up', 'Meeting', 'LinkedIn', 'WhatsApp', 'Demo', 'Proposal', 'Other']
+
 const priorityVariant = { High: 'danger', Medium: 'warning', Low: 'neutral' } as const
-const typeVariant = { Call: 'indigo', Email: 'info', 'Follow-up': 'warning', Meeting: 'success', Other: 'neutral' } as const
+const typeVariant: Record<string, 'indigo' | 'info' | 'warning' | 'success' | 'neutral' | 'danger'> = {
+  Call: 'indigo', Email: 'info', 'Follow-up': 'warning', Meeting: 'success',
+  LinkedIn: 'info', WhatsApp: 'success', Demo: 'indigo', Proposal: 'danger', Other: 'neutral',
+}
 
 const ALARM_OFFSETS = [
   { label: 'No alarm', value: '' },
@@ -115,7 +120,7 @@ export default function TasksPage() {
     e.preventDefault()
     setSaving(true)
     const alarm_at = computeAlarmAt(form.alarm_offset)
-    const { error } = await supabase.from('tasks').insert([{
+    const { data: taskData, error } = await supabase.from('tasks').insert([{
       title: form.title,
       contact_name: form.contact_name || null,
       type: form.type,
@@ -125,9 +130,32 @@ export default function TasksPage() {
       done: false,
       alarm_at,
       alarm_triggered: false,
-    }])
+    }]).select().single()
+    if (error) { setSaving(false); setError(error.message); return }
+
+    // Auto-create email draft when task type is Email
+    if (form.type === 'Email' && form.contact_name) {
+      // Look up contact email from users table
+      const { data: contact } = await supabase
+        .from('users')
+        .select('email, full_name')
+        .ilike('full_name', `%${form.contact_name.trim()}%`)
+        .limit(1)
+        .single()
+
+      await supabase.from('emails').insert([{
+        to_email: contact?.email ?? '',
+        to_name: form.contact_name,
+        contact_name: form.contact_name,
+        subject: `Follow-up: ${form.title}`,
+        body: '',
+        status: 'draft',
+        task_id: taskData?.id ?? null,
+        template_name: null,
+      }])
+    }
+
     setSaving(false)
-    if (error) { setError(error.message); return }
     setShowForm(false)
     setForm(emptyForm)
     fetchTasks()
@@ -244,7 +272,7 @@ export default function TasksPage() {
             {/* Type filter */}
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500">
-              {['All', 'Call', 'Email', 'Follow-up', 'Meeting', 'Other'].map(t => <option key={t}>{t}</option>)}
+              {['All', ...TASK_TYPES].map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <button onClick={() => setShowForm(v => !v)}
@@ -278,7 +306,7 @@ export default function TasksPage() {
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-slate-500">Type</label>
                 <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={cls}>
-                  {['Call', 'Email', 'Follow-up', 'Meeting', 'Other'].map(t => <option key={t}>{t}</option>)}
+                  {TASK_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
