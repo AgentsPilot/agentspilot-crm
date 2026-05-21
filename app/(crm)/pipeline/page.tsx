@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, DollarSign, Users, TrendingUp } from 'lucide-react'
+import { Plus, X, Loader2, DollarSign, Users, TrendingUp, Zap } from 'lucide-react'
 
 type Deal = {
   id: string
@@ -16,6 +16,7 @@ type Deal = {
   stage: Stage
   priority: 'High' | 'Medium' | 'Low'
   notes: string | null
+  is_draft: boolean
   created_at: string
   updated_at: string
 }
@@ -104,6 +105,26 @@ export default function PipelinePage() {
 
   async function deleteDeal(id: string) {
     await supabase.from('pipeline_deals').delete().eq('id', id)
+    fetchDeals()
+  }
+
+  async function activateDeal(deal: Deal) {
+    // Mark deal as active
+    await supabase.from('pipeline_deals')
+      .update({ is_draft: false, updated_at: new Date().toISOString() })
+      .eq('id', deal.id)
+
+    // Auto-create a follow-up task
+    await supabase.from('tasks').insert([{
+      title: `Follow up with ${deal.contact_name}`,
+      contact_name: deal.contact_name,
+      type: 'Follow-up',
+      priority: 'High',
+      due_date: new Date(Date.now() + 86400000).toISOString().split('T')[0], // tomorrow
+      done: false,
+      notes: `Auto-created when deal activated. Campaign: ${deal.campaign_name ?? '—'}`,
+    }])
+
     fetchDeals()
   }
 
@@ -250,11 +271,23 @@ export default function PipelinePage() {
                     <div className="space-y-2">
                       {stageDeals.map(deal => {
                         const stageIdx = STAGES.indexOf(deal.stage)
+                        const isDraft = deal.is_draft
                         return (
-                          <div key={deal.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                          <div key={deal.id} className={`rounded-xl border p-4 shadow-sm transition-shadow ${
+                            isDraft
+                              ? 'border-dashed border-slate-300 bg-slate-50 opacity-75'
+                              : 'border-gray-200 bg-white hover:shadow-md'
+                          }`}>
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-900 truncate">{deal.contact_name}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className={`text-sm font-semibold truncate ${isDraft ? 'text-slate-500' : 'text-slate-900'}`}>
+                                    {deal.contact_name}
+                                  </p>
+                                  {isDraft && (
+                                    <span className="text-xs bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-medium shrink-0">Draft</span>
+                                  )}
+                                </div>
                                 {deal.company && <p className="text-xs text-slate-400 truncate">{deal.company}</p>}
                               </div>
                               <button onClick={() => deleteDeal(deal.id)} className="ml-1 text-slate-200 hover:text-red-400 transition-colors shrink-0">
@@ -277,7 +310,14 @@ export default function PipelinePage() {
                               <p className="text-xs text-slate-400 truncate mb-2">{deal.campaign_name}</p>
                             )}
 
-                            {/* Move buttons */}
+                            {/* Activate button for drafts */}
+                            {isDraft ? (
+                              <button onClick={() => activateDeal(deal)}
+                                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-indigo-600 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors mt-2">
+                                <Zap className="h-3.5 w-3.5" /> Activate → Create Task
+                              </button>
+                            ) : (
+                            /* Move buttons */
                             <div className="flex gap-1 mt-2">
                               {stageIdx > 0 && (
                                 <button onClick={() => moveStage(deal, 'back')} disabled={movingId === deal.id}
@@ -292,6 +332,7 @@ export default function PipelinePage() {
                                 </button>
                               )}
                             </div>
+                            )}
                           </div>
                         )
                       })}
