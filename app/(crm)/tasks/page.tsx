@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
-import { CheckCircle2, Circle, Plus, X, Loader2, Clock, AlertCircle, Search, Bell, BellOff } from 'lucide-react'
+import { CheckCircle2, Circle, Plus, X, Loader2, Clock, AlertCircle, Search, Bell, BellOff, Pencil } from 'lucide-react'
 
 type Task = {
   id: string
@@ -102,6 +102,9 @@ export default function TasksPage() {
   const [dayFilter, setDayFilter] = useState('All')
   const [typeFilter, setTypeFilter] = useState('All')
   const [search, setSearch] = useState('')
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [editForm, setEditForm] = useState(emptyForm)
+  const [editSaving, setEditSaving] = useState(false)
 
   async function fetchTasks() {
     setLoading(true)
@@ -173,6 +176,37 @@ export default function TasksPage() {
 
   async function dismissAlarm(task: Task) {
     await supabase.from('tasks').update({ alarm_triggered: true }).eq('id', task.id)
+    fetchTasks()
+  }
+
+  function openEdit(task: Task) {
+    setEditingTask(task)
+    setEditForm({
+      title: task.title,
+      contact_name: task.contact_name ?? '',
+      type: task.type,
+      priority: task.priority,
+      due_date: task.due_date ?? '',
+      notes: task.notes ?? '',
+      alarm_offset: '',
+    })
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingTask) return
+    setEditSaving(true)
+    const { error } = await supabase.from('tasks').update({
+      title: editForm.title,
+      contact_name: editForm.contact_name || null,
+      type: editForm.type,
+      priority: editForm.priority,
+      due_date: editForm.due_date || null,
+      notes: editForm.notes || null,
+    }).eq('id', editingTask.id)
+    setEditSaving(false)
+    if (error) { setError(error.message); return }
+    setEditingTask(null)
     fetchTasks()
   }
 
@@ -340,6 +374,60 @@ export default function TasksPage() {
           </div>
         )}
 
+        {/* Edit Task Modal */}
+        {editingTask && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm px-4">
+            <div className="w-full max-w-2xl rounded-xl border border-gray-200 bg-white p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-semibold text-slate-900">Edit Task</h3>
+                <button onClick={() => setEditingTask(null)}><X className="h-4 w-4 text-slate-400" /></button>
+              </div>
+              <form onSubmit={saveEdit} className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="col-span-2 flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Task <span className="text-red-500">*</span></label>
+                  <input required value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                    className={cls} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Contact</label>
+                  <input value={editForm.contact_name} onChange={e => setEditForm(f => ({ ...f, contact_name: e.target.value }))}
+                    className={cls} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Due Date</label>
+                  <input type="date" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))}
+                    className={cls} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Type</label>
+                  <select value={editForm.type} onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))} className={cls}>
+                    {TASK_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Priority</label>
+                  <select value={editForm.priority} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))} className={cls}>
+                    {['High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2 flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Notes</label>
+                  <input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} className={cls} />
+                </div>
+                <div className="col-span-2 md:col-span-4 flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setEditingTask(null)}
+                    className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                  <button type="submit" disabled={editSaving}
+                    className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                    {editSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {editSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Task List */}
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-2 text-slate-500">
@@ -407,6 +495,9 @@ export default function TasksPage() {
                             </div>
                           )}
                           <span className="text-xs text-slate-300">{formatCreatedAt(task.created_at)}</span>
+                          <button onClick={() => openEdit(task)} className="text-slate-400 hover:text-orange-500 transition-colors">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
                           <button onClick={() => deleteTask(task.id)} className="text-slate-400 hover:text-red-600 transition-colors">
                             <X className="h-4 w-4" />
                           </button>
@@ -436,6 +527,9 @@ export default function TasksPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-300">{formatCreatedAt(task.created_at)}</span>
+                        <button onClick={() => openEdit(task)} className="text-slate-400 hover:text-orange-500 transition-colors">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                         <button onClick={() => deleteTask(task.id)} className="text-slate-400 hover:text-red-600 transition-colors">
                           <X className="h-4 w-4" />
                         </button>
