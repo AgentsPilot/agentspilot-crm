@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Calendar, Layout, PenSquare, Linkedin, Instagram, Facebook, Globe, ChevronLeft, ChevronRight, Pencil, Check } from 'lucide-react'
+import { Plus, X, Loader2, Calendar, Layout, PenSquare, Linkedin, Instagram, Globe, ChevronLeft, ChevronRight, Pencil, Check } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SocialPost = {
@@ -84,7 +84,7 @@ const ALL_PLATFORMS = ['LinkedIn', 'Facebook', 'Instagram', 'TikTok', 'Website',
 
 const platformIcon: Record<string, React.ReactNode> = {
   LinkedIn: <Linkedin className="h-4 w-4" />,
-  Facebook: <Facebook className="h-4 w-4" />,
+  Facebook: <span className="text-xs font-bold">f</span>,
   Instagram: <Instagram className="h-4 w-4" />,
   TikTok: <span className="text-xs font-bold">TK</span>,
   Website: <Globe className="h-4 w-4" />,
