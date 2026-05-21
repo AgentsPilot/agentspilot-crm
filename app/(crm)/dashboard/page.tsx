@@ -33,7 +33,7 @@ type Campaign = {
   channel: string | null
   status: string
   budget: number | null
-  spend: number | null
+  spent: number | null
 }
 
 const STAGE_ORDER = ['New Lead', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost']
@@ -74,7 +74,7 @@ export default function DashboardPage() {
         supabase.from('users').select('id,full_name,email,utm_source,utm_medium,status,campaign_name,created_at'),
         supabase.from('pipeline_deals').select('id,stage,value'),
         supabase.from('tasks').select('id,due_date,done'),
-        supabase.from('campaigns').select('id,name,channel,status,budget,spend'),
+        supabase.from('campaigns').select('id,name,channel,status,budget,spent'),
       ])
       setContacts(c.data ?? [])
       setDeals(d.data ?? [])
@@ -87,9 +87,9 @@ export default function DashboardPage() {
 
   // KPIs
   const totalLeads = contacts.length
-  const activeCampaigns = campaigns.filter(c => c.status === 'Active').length
+  const activeCampaigns = campaigns.filter(c => c.status === 'active').length
   const totalBudget = campaigns.reduce((s, c) => s + (c.budget ?? 0), 0)
-  const totalSpend = campaigns.reduce((s, c) => s + (c.spend ?? 0), 0)
+  const totalSpend = campaigns.reduce((s, c) => s + (c.spent ?? 0), 0)
   const budgetUsed = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : 0
   const wonDeals = deals.filter(d => d.stage === 'Won')
   const wonValue = wonDeals.reduce((s, d) => s + d.value, 0)
@@ -286,7 +286,7 @@ export default function DashboardPage() {
             ) : (
               <div className="divide-y divide-gray-50">
                 {campaigns.slice(0, 5).map(c => {
-                  const pct = c.budget && c.budget > 0 ? Math.round(((c.spend ?? 0) / c.budget) * 100) : 0
+                  const pct = c.budget && c.budget > 0 ? Math.round(((c.spent ?? 0) / c.budget) * 100) : 0
                   return (
                     <div key={c.id} className="px-5 py-3">
                       <div className="flex items-center justify-between mb-1.5">
@@ -295,8 +295,8 @@ export default function DashboardPage() {
                           <p className="text-xs text-slate-400">{c.channel ?? '—'}</p>
                         </div>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
-                          c.status === 'Active' ? 'bg-emerald-100 text-emerald-700' :
-                          c.status === 'Paused' ? 'bg-amber-100 text-amber-700' :
+                          c.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                          c.status === 'paused' ? 'bg-amber-100 text-amber-700' :
                           'bg-gray-100 text-gray-500'
                         }`}>{c.status}</span>
                       </div>
@@ -307,7 +307,7 @@ export default function DashboardPage() {
                             style={{ width: `${Math.min(pct, 100)}%` }}
                           />
                         </div>
-                        <span className="text-xs text-slate-400 shrink-0">${(c.spend ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
+                        <span className="text-xs text-slate-400 shrink-0">${(c.spent ?? 0).toLocaleString()} / ${(c.budget ?? 0).toLocaleString()}</span>
                       </div>
                     </div>
                   )
