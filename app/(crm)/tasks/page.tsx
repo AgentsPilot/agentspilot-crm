@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
@@ -115,7 +115,7 @@ export default function TasksPage() {
       <div className="p-6 space-y-6">
 
         {error && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400 flex justify-between">
+          <div className="rounded-lg bg-red-50 border border-red-500/20 px-4 py-3 text-sm text-red-600 flex justify-between">
             {error}<button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
           </div>
         )}
@@ -123,15 +123,15 @@ export default function TasksPage() {
         {/* Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Due Today', value: todayCount, color: 'text-red-400', bg: 'bg-red-500/10' },
-            { label: 'Overdue', value: overdueCount, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-            { label: 'Pending', value: pendingCount, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-            { label: 'Completed', value: doneCount, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+            { label: 'Due Today', value: todayCount, color: 'text-red-600', bg: 'bg-red-50' },
+            { label: 'Overdue', value: overdueCount, color: 'text-orange-500', bg: 'bg-orange-50' },
+            { label: 'Pending', value: pendingCount, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { label: 'Completed', value: doneCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
           ].map(s => (
-            <div key={s.label} className={`rounded-xl border border-[#222] ${s.bg} p-4`}>
-              <p className="text-xs text-zinc-500">{s.label}</p>
+            <div key={s.label} className={`rounded-xl border border-gray-200 ${s.bg} p-4`}>
+              <p className="text-xs text-slate-500">{s.label}</p>
               <p className={`text-2xl font-bold mt-1 ${s.color}`}>
-                {loading ? <span className="animate-pulse bg-zinc-800 rounded h-7 w-8 inline-block" /> : s.value}
+                {loading ? <span className="animate-pulse bg-gray-100 rounded h-7 w-8 inline-block" /> : s.value}
               </p>
             </div>
           ))}
@@ -143,21 +143,21 @@ export default function TasksPage() {
             {DAY_FILTERS.map(f => (
               <button key={f} onClick={() => setDayFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  dayFilter === f ? 'bg-orange-500 text-white' : 'bg-[#1a1a1a] border border-[#333] text-zinc-400 hover:text-white'
+                  dayFilter === f ? 'bg-orange-500 text-white' : 'bg-white border border-gray-200 text-slate-500 hover:text-white'
                 }`}>
                 {f}
                 {f === 'Overdue' && overdueCount > 0 && (
-                  <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 py-0.5 text-xs">{overdueCount}</span>
+                  <span className="ml-1.5 bg-red-500 text-slate-900 rounded-full px-1.5 py-0.5 text-xs">{overdueCount}</span>
                 )}
               </button>
             ))}
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-              className="text-sm border border-[#333] rounded-lg px-3 py-1.5 bg-[#1a1a1a] text-zinc-300">
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-slate-700">
               {['All', 'Call', 'Email', 'Follow-up', 'Meeting', 'Other'].map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <button onClick={() => setShowForm(v => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-slate-900 text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
             <Plus className="h-4 w-4" /> Add Task
           </button>
         </div>
@@ -210,7 +210,7 @@ export default function TasksPage() {
                 <button type="button" onClick={() => setShowForm(false)}
                   className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-slate-900 rounded-lg hover:bg-orange-600 disabled:opacity-50">
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {saving ? 'Saving...' : 'Save Task'}
                 </button>
@@ -221,34 +221,34 @@ export default function TasksPage() {
 
         {/* Task List */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 gap-2 text-zinc-500">
+          <div className="flex items-center justify-center py-20 gap-2 text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" /> Loading tasks...
           </div>
         ) : (
           <div className="space-y-4">
             {/* Pending */}
-            <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
-              <div className="px-5 py-3 bg-[#111] border-b border-[#222]">
-                <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Pending ({pending.length})</p>
+            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pending ({pending.length})</p>
               </div>
               {pending.length === 0 ? (
-                <div className="text-center py-10 text-zinc-600 text-sm">
+                <div className="text-center py-10 text-slate-400 text-sm">
                   {tasks.length === 0 ? 'No tasks yet — click Add Task to create one.' : 'No tasks match this filter.'}
                 </div>
               ) : (
-                <div className="divide-y divide-[#222]">
+                <div className="divide-y divide-gray-100">
                   {pending.map(task => (
-                    <div key={task.id} className={`flex items-start gap-3 px-5 py-4 hover:bg-[#222] transition-colors ${isOverdue(task.due_date) ? 'bg-red-500/5' : ''}`}>
+                    <div key={task.id} className={`flex items-start gap-3 px-5 py-4 hover:bg-gray-50 transition-colors ${isOverdue(task.due_date) ? 'bg-red-500/5' : ''}`}>
                       <button onClick={() => toggleDone(task)} className="mt-0.5 shrink-0">
-                        <Circle className="h-5 w-5 text-zinc-600 hover:text-orange-400 transition-colors" />
+                        <Circle className="h-5 w-5 text-slate-400 hover:text-orange-500 transition-colors" />
                       </button>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{task.title}</p>
+                        <p className="text-sm font-medium text-slate-900">{task.title}</p>
                         {task.contact_name && (
-                          <p className="text-xs text-zinc-500 mt-0.5">{task.contact_name}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{task.contact_name}</p>
                         )}
                         {task.notes && (
-                          <p className="text-xs text-zinc-600 mt-1 italic">{task.notes}</p>
+                          <p className="text-xs text-slate-400 mt-1 italic">{task.notes}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -256,8 +256,8 @@ export default function TasksPage() {
                         <Badge label={task.priority} variant={priorityVariant[task.priority]} />
                         {task.due_date && (
                           <div className={`flex items-center gap-1 text-xs font-medium ${
-                            isOverdue(task.due_date) ? 'text-red-400' :
-                            isDueToday(task.due_date) ? 'text-amber-400' : 'text-zinc-500'
+                            isOverdue(task.due_date) ? 'text-red-600' :
+                            isDueToday(task.due_date) ? 'text-amber-600' : 'text-slate-500'
                           }`}>
                             {isOverdue(task.due_date)
                               ? <AlertCircle className="h-3.5 w-3.5" />
@@ -265,7 +265,7 @@ export default function TasksPage() {
                             {isOverdue(task.due_date) ? 'Overdue' : isDueToday(task.due_date) ? 'Today' : task.due_date}
                           </div>
                         )}
-                        <button onClick={() => deleteTask(task.id)} className="text-zinc-700 hover:text-red-400 transition-colors">
+                        <button onClick={() => deleteTask(task.id)} className="text-slate-600 hover:text-red-600 transition-colors">
                           <X className="h-4 w-4" />
                         </button>
                       </div>
@@ -277,21 +277,21 @@ export default function TasksPage() {
 
             {/* Completed */}
             {done.length > 0 && (
-              <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
-                <div className="px-5 py-3 bg-[#111] border-b border-[#222]">
-                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Completed ({done.length})</p>
+              <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Completed ({done.length})</p>
                 </div>
-                <div className="divide-y divide-[#222]">
+                <div className="divide-y divide-gray-100">
                   {done.map(task => (
                     <div key={task.id} className="flex items-start gap-3 px-5 py-3 opacity-50 hover:opacity-70 transition-opacity">
                       <button onClick={() => toggleDone(task)} className="mt-0.5 shrink-0">
                         <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                       </button>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-zinc-400 line-through">{task.title}</p>
-                        {task.contact_name && <p className="text-xs text-zinc-600">{task.contact_name}</p>}
+                        <p className="text-sm font-medium text-slate-500 line-through">{task.title}</p>
+                        {task.contact_name && <p className="text-xs text-slate-400">{task.contact_name}</p>}
                       </div>
-                      <button onClick={() => deleteTask(task.id)} className="text-zinc-700 hover:text-red-400 transition-colors">
+                      <button onClick={() => deleteTask(task.id)} className="text-slate-600 hover:text-red-600 transition-colors">
                         <X className="h-4 w-4" />
                       </button>
                     </div>
@@ -305,3 +305,4 @@ export default function TasksPage() {
     </div>
   )
 }
+

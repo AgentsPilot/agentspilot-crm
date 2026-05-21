@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
@@ -26,12 +26,12 @@ type Stage = 'New Lead' | 'Contacted' | 'Qualified' | 'Proposal Sent' | 'Won' | 
 const STAGES: Stage[] = ['New Lead', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost']
 
 const stageStyle: Record<Stage, { dot: string; headerBg: string; headerBorder: string }> = {
-  'New Lead':      { dot: 'bg-sky-500',     headerBg: 'bg-sky-500/10',     headerBorder: 'border-sky-500/20' },
+  'New Lead':      { dot: 'bg-sky-500',     headerBg: 'bg-sky-50',     headerBorder: 'border-sky-500/20' },
   'Contacted':     { dot: 'bg-indigo-500',  headerBg: 'bg-indigo-500/10',  headerBorder: 'border-indigo-500/20' },
   'Qualified':     { dot: 'bg-violet-500',  headerBg: 'bg-violet-500/10',  headerBorder: 'border-violet-500/20' },
-  'Proposal Sent': { dot: 'bg-amber-500',   headerBg: 'bg-amber-500/10',   headerBorder: 'border-amber-500/20' },
-  'Won':           { dot: 'bg-emerald-500', headerBg: 'bg-emerald-500/10', headerBorder: 'border-emerald-500/20' },
-  'Lost':          { dot: 'bg-red-400',     headerBg: 'bg-red-500/10',     headerBorder: 'border-red-500/20' },
+  'Proposal Sent': { dot: 'bg-amber-500',   headerBg: 'bg-amber-50',   headerBorder: 'border-amber-500/20' },
+  'Won':           { dot: 'bg-emerald-500', headerBg: 'bg-emerald-50', headerBorder: 'border-emerald-500/20' },
+  'Lost':          { dot: 'bg-red-400',     headerBg: 'bg-red-50',     headerBorder: 'border-red-500/20' },
 }
 
 const priorityVariant = { High: 'danger', Medium: 'warning', Low: 'neutral' } as const
@@ -155,7 +155,7 @@ export default function PipelinePage() {
       <div className="p-6 space-y-6">
 
         {error && (
-          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400 flex justify-between">
+          <div className="rounded-lg bg-red-50 border border-red-500/20 px-4 py-3 text-sm text-red-600 flex justify-between">
             {error}
             <button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
           </div>
@@ -164,19 +164,19 @@ export default function PipelinePage() {
         {/* Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Active Deals', value: deals.filter(d => !['Won','Lost'].includes(d.stage)).length, icon: Users, color: 'text-sky-400', bg: 'bg-sky-500/10' },
-            { label: 'Pipeline Value', value: `$${totalPipeline.toLocaleString()}`, icon: DollarSign, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-            { label: 'Won Value', value: `$${totalWon.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-            { label: 'Win Rate', value: `${winRate}%`, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+            { label: 'Active Deals', value: deals.filter(d => !['Won','Lost'].includes(d.stage)).length, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50' },
+            { label: 'Pipeline Value', value: `$${totalPipeline.toLocaleString()}`, icon: DollarSign, color: 'text-orange-500', bg: 'bg-orange-50' },
+            { label: 'Won Value', value: `$${totalWon.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Win Rate', value: `${winRate}%`, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
           ].map(s => (
-            <div key={s.label} className="rounded-xl border border-[#222] bg-[#1a1a1a] p-4 flex items-center gap-3">
+            <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-3">
               <div className={`h-10 w-10 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}>
                 <s.icon className={`h-5 w-5 ${s.color}`} />
               </div>
               <div>
-                <p className="text-xs text-zinc-500">{s.label}</p>
+                <p className="text-xs text-slate-500">{s.label}</p>
                 <p className={`text-xl font-bold ${s.color}`}>
-                  {loading ? <span className="animate-pulse bg-zinc-800 rounded h-6 w-12 inline-block" /> : s.value}
+                  {loading ? <span className="animate-pulse bg-gray-100 rounded h-6 w-12 inline-block" /> : s.value}
                 </p>
               </div>
             </div>
@@ -186,7 +186,7 @@ export default function PipelinePage() {
         {/* Add Deal button */}
         <div className="flex justify-end">
           <button onClick={() => setShowForm(v => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-slate-900 text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
             <Plus className="h-4 w-4" /> Add Deal
           </button>
         </div>
@@ -228,7 +228,7 @@ export default function PipelinePage() {
                 <button type="button" onClick={() => setShowForm(false)}
                   className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-slate-900 rounded-lg hover:bg-orange-600 disabled:opacity-50">
                   {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {saving ? 'Saving...' : 'Save Deal'}
                 </button>
@@ -239,7 +239,7 @@ export default function PipelinePage() {
 
         {/* Kanban Board */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 gap-2 text-zinc-500">
+          <div className="flex items-center justify-center py-20 gap-2 text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" /> Loading pipeline...
           </div>
         ) : (
@@ -256,12 +256,12 @@ export default function PipelinePage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className={`h-2 w-2 rounded-full ${dot}`} />
-                          <span className="text-xs font-semibold text-zinc-300">{stage}</span>
+                          <span className="text-xs font-semibold text-slate-700">{stage}</span>
                         </div>
-                        <span className="text-xs text-zinc-500 font-medium">{stageDeals.length}</span>
+                        <span className="text-xs text-slate-500 font-medium">{stageDeals.length}</span>
                       </div>
                       {stageValue > 0 && (
-                        <p className="text-xs text-zinc-500 mt-1">${stageValue.toLocaleString()}</p>
+                        <p className="text-xs text-slate-500 mt-1">${stageValue.toLocaleString()}</p>
                       )}
                     </div>
 
@@ -273,28 +273,28 @@ export default function PipelinePage() {
                         return (
                           <div key={deal.id} className={`rounded-xl border p-4 transition-shadow ${
                             isDraft
-                              ? 'border-dashed border-zinc-600 bg-[#1a1a1a] opacity-70'
-                              : 'border-[#333] bg-[#1a1a1a] hover:border-[#444]'
+                              ? 'border-dashed border-zinc-600 bg-white opacity-70'
+                              : 'border-gray-200 bg-white hover:border-[#444]'
                           }`}>
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <p className={`text-sm font-semibold truncate ${isDraft ? 'text-zinc-500' : 'text-white'}`}>
+                                  <p className={`text-sm font-semibold truncate ${isDraft ? 'text-slate-500' : 'text-white'}`}>
                                     {deal.contact_name}
                                   </p>
                                   {isDraft && (
-                                    <span className="text-xs bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded font-medium shrink-0">Draft</span>
+                                    <span className="text-xs bg-zinc-700 text-slate-500 px-1.5 py-0.5 rounded font-medium shrink-0">Draft</span>
                                   )}
                                 </div>
-                                {deal.company && <p className="text-xs text-zinc-600 truncate">{deal.company}</p>}
+                                {deal.company && <p className="text-xs text-slate-400 truncate">{deal.company}</p>}
                               </div>
-                              <button onClick={() => deleteDeal(deal.id)} className="ml-1 text-zinc-700 hover:text-red-400 transition-colors shrink-0">
+                              <button onClick={() => deleteDeal(deal.id)} className="ml-1 text-slate-600 hover:text-red-600 transition-colors shrink-0">
                                 <X className="h-3.5 w-3.5" />
                               </button>
                             </div>
 
                             {deal.value > 0 && (
-                              <p className="text-sm font-bold text-orange-400 mb-2">${deal.value.toLocaleString()}</p>
+                              <p className="text-sm font-bold text-orange-500 mb-2">${deal.value.toLocaleString()}</p>
                             )}
 
                             <div className="flex items-center gap-1.5 flex-wrap mb-3">
@@ -305,13 +305,13 @@ export default function PipelinePage() {
                             </div>
 
                             {deal.campaign_name && (
-                              <p className="text-xs text-zinc-600 truncate mb-2">{deal.campaign_name}</p>
+                              <p className="text-xs text-slate-400 truncate mb-2">{deal.campaign_name}</p>
                             )}
 
                             {/* Activate button for drafts */}
                             {isDraft ? (
                               <button onClick={() => activateDeal(deal)}
-                                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-orange-400 border border-orange-500/30 rounded-lg hover:bg-orange-500/10 transition-colors mt-2">
+                                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-orange-500 border border-orange-500/30 rounded-lg hover:bg-orange-50 transition-colors mt-2">
                                 <Zap className="h-3.5 w-3.5" /> Activate → Create Task
                               </button>
                             ) : (
@@ -319,13 +319,13 @@ export default function PipelinePage() {
                             <div className="flex gap-1 mt-2">
                               {stageIdx > 0 && (
                                 <button onClick={() => moveStage(deal, 'back')} disabled={movingId === deal.id}
-                                  className="flex-1 py-1 text-xs text-zinc-500 border border-[#333] rounded hover:bg-[#222] transition-colors">
+                                  className="flex-1 py-1 text-xs text-slate-500 border border-gray-200 rounded hover:bg-gray-50 transition-colors">
                                   ← Back
                                 </button>
                               )}
                               {stageIdx < STAGES.length - 1 && (
                                 <button onClick={() => moveStage(deal, 'forward')} disabled={movingId === deal.id}
-                                  className="flex-1 py-1 text-xs font-medium text-orange-400 border border-orange-500/30 rounded hover:bg-orange-500/10 transition-colors">
+                                  className="flex-1 py-1 text-xs font-medium text-orange-500 border border-orange-500/30 rounded hover:bg-orange-50 transition-colors">
                                   {movingId === deal.id ? '...' : 'Move →'}
                                 </button>
                               )}
@@ -337,7 +337,7 @@ export default function PipelinePage() {
                     </div>
 
                     {stageDeals.length === 0 && (
-                      <div className="rounded-xl border-2 border-dashed border-[#333] p-6 text-center text-xs text-zinc-700">
+                      <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center text-xs text-slate-600">
                         No deals
                       </div>
                     )}
@@ -352,3 +352,4 @@ export default function PipelinePage() {
     </div>
   )
 }
+

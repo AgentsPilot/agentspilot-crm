@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
@@ -215,19 +215,19 @@ export default function CampaignsPage() {
         {/* Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Active', value: campaigns.filter(c => c.status === 'active').length, icon: Megaphone, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-            { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-sky-400', bg: 'bg-sky-500/10' },
-            { label: 'Total Spent', value: `$${totalSpent.toLocaleString()}`, icon: DollarSign, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-            { label: 'Avg CPL', value: `$${avgCpl}`, icon: TrendingUp, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+            { label: 'Active', value: campaigns.filter(c => c.status === 'active').length, icon: Megaphone, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Total Leads', value: totalLeads, icon: Users, color: 'text-sky-600', bg: 'bg-sky-50' },
+            { label: 'Total Spent', value: `$${totalSpent.toLocaleString()}`, icon: DollarSign, color: 'text-orange-500', bg: 'bg-orange-50' },
+            { label: 'Avg CPL', value: `$${avgCpl}`, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
           ].map(s => (
-            <div key={s.label} className="rounded-xl border border-[#222] bg-[#1a1a1a] p-4 flex items-center gap-3">
+            <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-3">
               <div className={`h-10 w-10 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}>
                 <s.icon className={`h-5 w-5 ${s.color}`} />
               </div>
               <div>
-                <p className="text-xs text-zinc-500">{s.label}</p>
+                <p className="text-xs text-slate-500">{s.label}</p>
                 <p className={`text-xl font-bold ${s.color}`}>
-                  {loading ? <span className="animate-pulse bg-zinc-800 rounded h-6 w-10 inline-block" /> : s.value}
+                  {loading ? <span className="animate-pulse bg-gray-100 rounded h-6 w-10 inline-block" /> : s.value}
                 </p>
               </div>
             </div>
@@ -240,25 +240,25 @@ export default function CampaignsPage() {
             {['All', 'active', 'paused', 'draft', 'ended'].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
-                  statusFilter === s ? 'bg-orange-500 text-white' : 'bg-[#1a1a1a] border border-[#333] text-zinc-400 hover:text-white'
+                  statusFilter === s ? 'bg-orange-500 text-white' : 'bg-white border border-gray-200 text-slate-500 hover:text-white'
                 }`}>{s}</button>
             ))}
-            <div className="flex items-center gap-2 text-xs text-zinc-500 border border-[#333] rounded-lg bg-[#1a1a1a] px-3 py-1.5">
-              <span className="text-zinc-600">From</span>
+            <div className="flex items-center gap-2 text-xs text-slate-500 border border-gray-200 rounded-lg bg-white px-3 py-1.5">
+              <span className="text-slate-400">From</span>
               <input type="date" value={dateFilter.from} onChange={e => setDateFilter(f => ({ ...f, from: e.target.value }))}
-                className="text-xs text-zinc-300 focus:outline-none bg-transparent" />
-              <span className="text-zinc-600">To</span>
+                className="text-xs text-slate-700 focus:outline-none bg-transparent" />
+              <span className="text-slate-400">To</span>
               <input type="date" value={dateFilter.to} onChange={e => setDateFilter(f => ({ ...f, to: e.target.value }))}
-                className="text-xs text-zinc-300 focus:outline-none bg-transparent" />
+                className="text-xs text-slate-700 focus:outline-none bg-transparent" />
               {(dateFilter.from || dateFilter.to) && (
-                <button onClick={() => setDateFilter({ from: '', to: '' })} className="text-zinc-600 hover:text-red-400">
+                <button onClick={() => setDateFilter({ from: '', to: '' })} className="text-slate-400 hover:text-red-600">
                   <X className="h-3 w-3" />
                 </button>
               )}
             </div>
           </div>
           <button onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-slate-900 text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
             <Plus className="h-4 w-4" /> New Campaign
           </button>
         </div>
@@ -347,7 +347,7 @@ export default function CampaignsPage() {
                   <button type="button" onClick={closeForm}
                     className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
                   <button type="submit" disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                    className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-slate-900 rounded-lg hover:bg-orange-600 disabled:opacity-50">
                     {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     {saving ? 'Saving...' : editCampaign ? 'Save Changes' : 'Save Campaign'}
                   </button>
@@ -433,31 +433,31 @@ export default function CampaignsPage() {
         )}
 
         {/* Table */}
-        <div className="rounded-xl border border-[#222] bg-[#1a1a1a] overflow-hidden">
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center py-20 gap-2 text-zinc-500">
+            <div className="flex items-center justify-center py-20 gap-2 text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading campaigns...
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20 text-zinc-600 text-sm">
+            <div className="text-center py-20 text-slate-400 text-sm">
               {campaigns.length === 0 ? 'No campaigns yet — click New Campaign to add one.' : 'No campaigns match this filter.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-[#111] border-b border-[#222]">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     {['Campaign', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR%', 'Leads', 'Landing CR%', 'CPL', 'Start Date', 'Actions'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#222]">
+                <tbody className="divide-y divide-gray-100">
                   {filtered.map(c => (
-                    <tr key={c.id} className="hover:bg-[#222] transition-colors">
+                    <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-white">{c.name}</p>
-                        {c.goal && <p className="text-xs text-zinc-600 mt-0.5 max-w-48 truncate">{c.goal}</p>}
+                        <p className="font-medium text-slate-900">{c.name}</p>
+                        {c.goal && <p className="text-xs text-slate-400 mt-0.5 max-w-48 truncate">{c.goal}</p>}
                       </td>
                       <td className="px-4 py-3">
                         {c.channel && <Badge label={c.channel} variant={channelVariant[c.channel] ?? 'neutral'} />}
@@ -465,40 +465,40 @@ export default function CampaignsPage() {
                       <td className="px-4 py-3">
                         <select value={c.status} onChange={e => updateStatus(c.id, e.target.value as Campaign['status'])}
                           className={`text-xs font-medium rounded-full px-2 py-1 border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                            c.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' :
-                            c.status === 'paused' ? 'bg-amber-500/15 text-amber-400' :
-                            c.status === 'ended' ? 'bg-red-500/15 text-red-400' : 'bg-zinc-700/50 text-zinc-400'
+                            c.status === 'active' ? 'bg-emerald-500/15 text-emerald-600' :
+                            c.status === 'paused' ? 'bg-amber-500/15 text-amber-600' :
+                            c.status === 'ended' ? 'bg-red-500/15 text-red-600' : 'bg-slate-100 text-slate-500'
                           }`}>
                           {['active', 'paused', 'draft', 'ended'].map(s => <option key={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-3 text-zinc-400">{c.impressions > 0 ? c.impressions.toLocaleString() : '—'}</td>
-                      <td className="px-4 py-3 text-zinc-400">{c.clicks > 0 ? c.clicks.toLocaleString() : '—'}</td>
+                      <td className="px-4 py-3 text-slate-500">{c.impressions > 0 ? c.impressions.toLocaleString() : '—'}</td>
+                      <td className="px-4 py-3 text-slate-500">{c.clicks > 0 ? c.clicks.toLocaleString() : '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`font-bold ${c.ctr >= 3 ? 'text-emerald-400' : c.ctr >= 1 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                        <span className={`font-bold ${c.ctr >= 3 ? 'text-emerald-600' : c.ctr >= 1 ? 'text-amber-600' : 'text-slate-400'}`}>
                           {c.ctr > 0 ? `${c.ctr}%` : '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-medium text-orange-400">{c.leads}</td>
+                      <td className="px-4 py-3 font-medium text-orange-500">{c.leads}</td>
                       <td className="px-4 py-3">
-                        <span className={`font-bold ${c.landingCr >= 10 ? 'text-emerald-400' : c.landingCr >= 5 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                        <span className={`font-bold ${c.landingCr >= 10 ? 'text-emerald-600' : c.landingCr >= 5 ? 'text-amber-600' : 'text-slate-400'}`}>
                           {c.landingCr > 0 ? `${c.landingCr}%` : '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-zinc-400">{c.cpl > 0 ? `$${c.cpl}` : '—'}</td>
-                      <td className="px-4 py-3 text-xs text-zinc-600">{c.start_date ?? '—'}</td>
+                      <td className="px-4 py-3 text-slate-500">{c.cpl > 0 ? `$${c.cpl}` : '—'}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{c.start_date ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setViewCampaign(c)} className="text-zinc-600 hover:text-sky-400 transition-colors" title="View">
+                          <button onClick={() => setViewCampaign(c)} className="text-slate-400 hover:text-sky-600 transition-colors" title="View">
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button onClick={() => openEdit(c)} className="text-zinc-600 hover:text-amber-400 transition-colors" title="Edit">
+                          <button onClick={() => openEdit(c)} className="text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
                             <Pencil className="h-4 w-4" />
                           </button>
-                          <button onClick={() => copyUrl(c)} className="text-zinc-600 hover:text-emerald-400 transition-colors" title="Copy UTM link">
-                            {copiedId === c.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                          <button onClick={() => copyUrl(c)} className="text-slate-400 hover:text-emerald-600 transition-colors" title="Copy UTM link">
+                            {copiedId === c.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                           </button>
-                          <button onClick={() => deleteCampaign(c.id)} className="text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                          <button onClick={() => deleteCampaign(c.id)} className="text-slate-400 hover:text-red-600 transition-colors" title="Delete">
                             <X className="h-4 w-4" />
                           </button>
                         </div>
@@ -506,16 +506,16 @@ export default function CampaignsPage() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-[#111] border-t border-[#222]">
+                <tfoot className="bg-gray-50 border-t border-gray-100">
                   <tr>
-                    <td colSpan={3} className="px-4 py-2 text-xs font-semibold text-zinc-500">Totals</td>
-                    <td className="px-4 py-2 text-xs font-bold text-zinc-300">${totalBudget.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-xs font-bold text-zinc-300">${totalSpent.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-xs font-bold text-orange-400">{totalLeads}</td>
-                    <td className="px-4 py-2 text-xs font-bold text-amber-400">
+                    <td colSpan={3} className="px-4 py-2 text-xs font-semibold text-slate-500">Totals</td>
+                    <td className="px-4 py-2 text-xs font-bold text-slate-700">${totalBudget.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-xs font-bold text-slate-700">${totalSpent.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-xs font-bold text-orange-500">{totalLeads}</td>
+                    <td className="px-4 py-2 text-xs font-bold text-amber-600">
                       {totalLeads > 0 ? `${Math.round((campaigns.reduce((s, c) => s + c.leads * c.cr, 0) / totalLeads) * 10) / 10}%` : '—'}
                     </td>
-                    <td className="px-4 py-2 text-xs font-bold text-amber-400">${avgCpl}</td>
+                    <td className="px-4 py-2 text-xs font-bold text-amber-600">${avgCpl}</td>
                     <td colSpan={2} />
                   </tr>
                 </tfoot>
@@ -528,3 +528,4 @@ export default function CampaignsPage() {
     </div>
   )
 }
+
