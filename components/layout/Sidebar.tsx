@@ -4,23 +4,35 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, CheckSquare,
   Megaphone, Mail, BarChart2, Settings, ChevronRight, Bell, Share2,
+  TrendingUp, DollarSign, BookOpen, CalendarCheck, ListTodo, Anchor,
 } from 'lucide-react'
 
 const nav = [
   {
     section: 'CRM',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { label: 'Contacts', href: '/contacts', icon: Users },
-      { label: 'Pipeline', href: '/pipeline', icon: GitBranch },
-      { label: 'Tasks', href: '/tasks', icon: CheckSquare },
-      { label: 'Alarms', href: '/alarms', icon: Bell },
+      { label: 'Dashboard',   href: '/dashboard', icon: LayoutDashboard },
+      { label: 'Contacts',    href: '/contacts',  icon: Users },
+      { label: 'Pipeline',    href: '/pipeline',  icon: GitBranch },
+      { label: 'Tasks',       href: '/tasks',     icon: CheckSquare },
+      { label: 'Alarms',      href: '/alarms',    icon: Bell },
     ],
   },
   {
     section: 'Acquisition',
     items: [
-      { label: 'Campaigns', href: '/campaigns', icon: Megaphone },
+      { label: 'Campaigns',   href: '/campaigns', icon: Megaphone },
+      { label: 'Cohort',      href: '/cohort',    icon: TrendingUp },
+      { label: 'Budget',      href: '/budget',    icon: DollarSign },
+    ],
+  },
+  {
+    section: 'Content',
+    items: [
+      { label: 'Post Tracker',     href: '/post-tracker',    icon: CalendarCheck },
+      { label: 'Posts Library',    href: '/posts-library',   icon: BookOpen },
+      { label: 'Hooks Library',    href: '/hooks-library',   icon: Anchor },
+      { label: 'Weekly Checklist', href: '/weekly-checklist',icon: ListTodo },
     ],
   },
   {
@@ -32,7 +44,8 @@ const nav = [
   {
     section: 'Analytics',
     items: [
-      { label: 'Reports', href: '/reports', icon: BarChart2 },
+      { label: 'Analytics', href: '/analytics', icon: BarChart2 },
+      { label: 'Reports',   href: '/reports',   icon: BarChart2 },
     ],
   },
   {
