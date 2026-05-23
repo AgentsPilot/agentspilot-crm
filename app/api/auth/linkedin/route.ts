@@ -6,8 +6,9 @@ export async function GET() {
   // Requires "Sign In with LinkedIn using OpenID Connect" product enabled on the app
   // (linkedin.com/developers → your app → Products tab → add it — instant approval)
   const hasOpenId = process.env.LINKEDIN_OPENID_ENABLED === 'true'
+  // openid alone is enough to call /v2/userinfo and get the member `sub`
   const scope = encodeURIComponent(
-    hasOpenId ? 'openid profile w_member_social' : 'w_member_social'
+    hasOpenId ? 'openid w_member_social' : 'w_member_social'
   )
   const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=linkedin_connect`
   return NextResponse.redirect(url)

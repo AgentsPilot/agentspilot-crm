@@ -51,9 +51,10 @@ export async function GET(req: NextRequest) {
     if (uiRes.ok) {
       const ui = await uiRes.json()
       if (ui.sub) {
-        platformUserId = `urn:li:person:${ui.sub}`
-        platformUsername =
-          ui.name ?? ([ui.given_name, ui.family_name].filter(Boolean).join(' ') || 'LinkedIn')
+        platformUserId   = `urn:li:person:${ui.sub}`
+        // profile scope gives name/given_name; openid-only gives just sub
+        platformUsername = ui.name
+          ?? ([ui.given_name, ui.family_name].filter(Boolean).join(' ') || 'LinkedIn')
         console.log('LinkedIn URN via userinfo:', platformUserId)
       }
     } else {
