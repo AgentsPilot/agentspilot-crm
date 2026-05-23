@@ -33,50 +33,55 @@ export async function POST(req: NextRequest) {
     if (!conn) {
       results.LinkedIn = { success: false, message: 'Not connected' }
     } else {
-      try {
-        // Get LinkedIn person URN
-        const profileRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-          headers: { Authorization: `Bearer ${conn.access_token}` },
-        })
-        const profile = await profileRes.json()
-
-        const body: Record<string, unknown> = {
-          author: `urn:li:person:${profile.sub}`,
-          commentary: post.caption,
-          visibility: 'PUBLIC',
-          distribution: {
-            feedDistribution: 'MAIN_FEED',
-            targetEntities: [],
-            thirdPartyDistributionChannels: [],
-          },
-          lifecycleState: 'PUBLISHED',
-          isReshareDisabledByAuthor: false,
-        }
-
-        const publishRes = await fetch('https://api.linkedin.com/rest/posts', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${conn.access_token}`,
-            'Content-Type': 'application/json',
-            'X-Restli-Protocol-Version': '2.0.0',
-            'LinkedIn-Version': '202410',
-          },
-          body: JSON.stringify(body),
-        })
-
-        if (publishRes.ok || publishRes.status === 201) {
-          results.LinkedIn = { success: true, message: 'Published!' }
-        } else {
-          const errData = await publishRes.json().catch(() => ({}))
-          results.LinkedIn = {
-            success: false,
-            message: errData.message ?? `Error ${publishRes.status}`,
-          }
-        }
-      } catch (err: unknown) {
+      // Use stored author URN (resolved during OAuth connect)
+      const authorUrn = conn.platform_user_id
+      if (!authorUrn) {
         results.LinkedIn = {
           success: false,
-          message: err instanceof Error ? err.message : 'Unknown error',
+          message: 'Member URN not found — please disconnect and reconnect your LinkedIn account',
+        }
+      } else {
+        try {
+          console.log('Publishing as:', authorUrn)
+
+          const body = {
+            author: authorUrn,
+            lifecycleState: 'PUBLISHED',
+            specificContent: {
+              'com.linkedin.ugc.ShareContent': {
+                shareCommentary: { text: post.caption },
+                shareMediaCategory: 'NONE',
+              },
+            },
+            visibility: {
+              'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+            },
+          }
+
+          const publishRes = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${conn.access_token}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0',
+            },
+            body: JSON.stringify(body),
+          })
+
+          if (publishRes.ok || publishRes.status === 201) {
+            results.LinkedIn = { success: true, message: 'Published!' }
+          } else {
+            const errData = await publishRes.json().catch(() => ({}))
+            results.LinkedIn = {
+              success: false,
+              message: errData.message ?? `Error ${publishRes.status}`,
+            }
+          }
+        } catch (err: unknown) {
+          results.LinkedIn = {
+            success: false,
+            message: err instanceof Error ? err.message : 'Unknown error',
+          }
         }
       }
     }
