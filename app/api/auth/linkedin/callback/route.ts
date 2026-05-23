@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       if (ui.sub) {
         platformUserId = `urn:li:person:${ui.sub}`
         platformUsername =
-          ui.name ?? [ui.given_name, ui.family_name].filter(Boolean).join(' ') || 'LinkedIn'
+          ui.name ?? ([ui.given_name, ui.family_name].filter(Boolean).join(' ') || 'LinkedIn')
         console.log('LinkedIn URN via userinfo:', platformUserId)
       }
     } else {
