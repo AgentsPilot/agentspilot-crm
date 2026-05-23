@@ -417,19 +417,47 @@ export default function SocialPage() {
                 </div>
               </a>
             )}
-            {/* Coming soon platforms */}
-            {[
-              { label: 'Facebook', icon: 'f', color: 'bg-indigo-600' },
-              { label: 'Instagram', icon: 'ig', color: 'bg-pink-500' },
-            ].map(p => (
-              <div key={p.label} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-200 opacity-50 cursor-not-allowed">
-                <div className={`h-6 w-6 rounded ${p.color} flex items-center justify-center text-white text-xs font-bold`}>{p.icon}</div>
+            {/* Facebook */}
+            {isConnected('facebook') ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
+                <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">f</div>
                 <div>
-                  <p className="text-xs font-medium text-slate-500">{p.label}</p>
-                  <p className="text-xs text-slate-400">Coming soon</p>
+                  <p className="text-xs font-medium text-indigo-800">Facebook</p>
+                  <p className="text-xs text-indigo-500">{getConnection('facebook')?.platform_username}</p>
                 </div>
+                <Check className="h-3.5 w-3.5 text-emerald-500 ml-1" />
               </div>
-            ))}
+            ) : (
+              <a href="/api/auth/facebook"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer">
+                <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">f</div>
+                <div>
+                  <p className="text-xs font-medium text-slate-700">Facebook</p>
+                  <p className="text-xs text-indigo-500 font-medium">Connect →</p>
+                </div>
+              </a>
+            )}
+
+            {/* Instagram */}
+            {isConnected('instagram') ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-50 border border-pink-200">
+                <div className="h-6 w-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold">ig</div>
+                <div>
+                  <p className="text-xs font-medium text-pink-800">Instagram</p>
+                  <p className="text-xs text-pink-500">{getConnection('instagram')?.platform_username}</p>
+                </div>
+                <Check className="h-3.5 w-3.5 text-emerald-500 ml-1" />
+              </div>
+            ) : (
+              <a href="/api/auth/instagram"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-pink-300 hover:bg-pink-50 transition-colors cursor-pointer">
+                <div className="h-6 w-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold">ig</div>
+                <div>
+                  <p className="text-xs font-medium text-slate-700">Instagram</p>
+                  <p className="text-xs text-pink-500 font-medium">Connect →</p>
+                </div>
+              </a>
+            )}
           </div>
         </div>
 

@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const code = searchParams.get('code')
+  const code  = searchParams.get('code')
   const error = searchParams.get('error')
 
   if (error || !code) {
@@ -14,15 +14,15 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // Exchange code for access token
+  // ── Exchange code for access token ────────────────────────────────────────
   const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'authorization_code',
+      grant_type:    'authorization_code',
       code,
-      redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/linkedin/callback`,
-      client_id: process.env.LINKEDIN_CLIENT_ID!,
+      redirect_uri:  `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/linkedin/callback`,
+      client_id:     process.env.LINKEDIN_CLIENT_ID!,
       client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
     }),
   })
@@ -36,36 +36,64 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // Resolve the member's profile to get their person URN
+  // ── Resolve member URN ─────────────────────────────────────────────────────
+  // Try 1: OpenID Connect /userinfo (needs `openid` scope)
+  // Try 2: v2/me (needs `r_liteprofile` or `profile` scope)
+  // Either gives us the numeric member ID → urn:li:person:{id}
   let platformUserId: string | null = null
   let platformUsername = 'LinkedIn'
+
   try {
-    const profileRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+    // Attempt 1 — OpenID Connect userinfo
+    const uiRes = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     })
-    if (profileRes.ok) {
-      const profile = await profileRes.json()
-      // `sub` is the member's numeric ID; construct the URN
-      if (profile.sub) {
-        platformUserId = `urn:li:person:${profile.sub}`
+    if (uiRes.ok) {
+      const ui = await uiRes.json()
+      if (ui.sub) {
+        platformUserId = `urn:li:person:${ui.sub}`
+        platformUsername =
+          ui.name ?? [ui.given_name, ui.family_name].filter(Boolean).join(' ') || 'LinkedIn'
+        console.log('LinkedIn URN via userinfo:', platformUserId)
       }
-      if (profile.name) platformUsername = profile.name
-      else if (profile.given_name) platformUsername = `${profile.given_name} ${profile.family_name ?? ''}`.trim()
+    } else {
+      console.warn('LinkedIn /userinfo status:', uiRes.status, '— trying /v2/me')
+      // Attempt 2 — classic v2/me
+      const meRes = await fetch('https://api.linkedin.com/v2/me', {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          'X-Restli-Protocol-Version': '2.0.0',
+        },
+      })
+      if (meRes.ok) {
+        const me = await meRes.json()
+        if (me.id) {
+          platformUserId = `urn:li:person:${me.id}`
+          const first = me.localizedFirstName ?? ''
+          const last  = me.localizedLastName  ?? ''
+          platformUsername = `${first} ${last}`.trim() || 'LinkedIn'
+          console.log('LinkedIn URN via /v2/me:', platformUserId)
+        }
+      } else {
+        console.warn('LinkedIn /v2/me status:', meRes.status, '— URN will be null')
+      }
     }
-    console.log('LinkedIn profile resolved:', platformUserId, platformUsername)
   } catch (err) {
     console.error('Failed to fetch LinkedIn profile:', err)
   }
 
-  // Store connection
-  const { error: dbError } = await supabase.from('social_connections').upsert({
-    platform: 'linkedin',
-    access_token: tokenData.access_token,
-    expires_at: new Date(Date.now() + (tokenData.expires_in ?? 5184000) * 1000).toISOString(),
-    platform_user_id: platformUserId,
-    platform_username: platformUsername,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'platform' })
+  // ── Persist connection ─────────────────────────────────────────────────────
+  const { error: dbError } = await supabase.from('social_connections').upsert(
+    {
+      platform:          'linkedin',
+      access_token:      tokenData.access_token,
+      expires_at:        new Date(Date.now() + (tokenData.expires_in ?? 5184000) * 1000).toISOString(),
+      platform_user_id:  platformUserId,
+      platform_username: platformUsername,
+      updated_at:        new Date().toISOString(),
+    },
+    { onConflict: 'platform' }
+  )
 
   if (dbError) {
     console.error('DB error saving LinkedIn connection:', dbError)
