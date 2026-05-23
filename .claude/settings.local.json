@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell($pwd)"
+      "PowerShell($pwd)",
+      "Bash(curl -s \"https://rspnielpnsbguvygsnci.supabase.co/rest/v1/pipeline_deals?limit=1\" -H \"apikey: sb_publishable_VDGLT5QPVuWUOiMxRsy97Q_yh6oNMFK\" -H \"Authorization: Bearer sb_publishable_VDGLT5QPVuWUOiMxRsy97Q_yh6oNMFK\")",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(npx tsx *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm install *)",
+      "Bash(node -e ' *)",
+      "WebFetch(domain:agentspilot-marketing.vercel.app)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__804debb8-5143-4e62-8bb8-05b4f0366c45__generate-design"
     ]
   }
 }

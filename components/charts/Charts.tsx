@@ -4,8 +4,53 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Tooltip, Legend,
   XAxis, YAxis, CartesianGrid,
 } from 'recharts'
-import { weeklyPerformance, channelPerformance, budgetData, funnelData, channelBudget } from '@/lib/mock-data'
 
+// ── Shared types (used by pages + charts) ─────────────────────────────────────
+export type WeeklyRow = {
+  week: string
+  leads: number
+  conversions: number
+  cr: number
+  cpl: number
+  cpa: number
+  spend: number
+  revenue: number
+}
+
+export type ChannelRow = {
+  channel: string
+  leads: number
+  conversions: number
+  cr: number
+  cpl: number
+  spend: number
+  revenue: number
+  color: string
+}
+
+export type BudgetRow = {
+  month: string
+  allocated: number
+  spent: number
+  revenue: number
+  roi: number
+}
+
+export type ChannelBudgetRow = {
+  channel: string
+  allocated: number
+  spent: number
+  pct: number
+}
+
+export type FunnelRow = {
+  level: string
+  count: number
+  pct: number
+  color: string
+}
+
+// ── Colour palette ────────────────────────────────────────────────────────────
 const COLORS = {
   indigo: '#6366F1',
   sky: '#0EA5E9',
@@ -19,10 +64,10 @@ const fmt = (v: unknown) => Number(v)
 const fmtMoney = (v: unknown) => `$${fmt(v).toLocaleString()}`
 
 // ─── Performance Line Chart (CR + Leads over 12 weeks) ───────────────────────
-export function PerformanceLineChart() {
+export function PerformanceLineChart({ data }: { data: WeeklyRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <AreaChart data={weeklyPerformance} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="cr" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor={COLORS.indigo} stopOpacity={0.15} />
@@ -54,10 +99,10 @@ export function PerformanceLineChart() {
 }
 
 // ─── CPL Trend Chart ──────────────────────────────────────────────────────────
-export function CplLineChart() {
+export function CplLineChart({ data }: { data: WeeklyRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <LineChart data={weeklyPerformance} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
         <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} domain={[30, 60]} />
@@ -70,10 +115,10 @@ export function CplLineChart() {
 }
 
 // ─── Channel Bar Chart ────────────────────────────────────────────────────────
-export function ChannelBarChart() {
+export function ChannelBarChart({ data }: { data: ChannelRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={channelPerformance} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
         <XAxis dataKey="channel" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
@@ -89,12 +134,12 @@ export function ChannelBarChart() {
 // ─── Budget Donut Chart ───────────────────────────────────────────────────────
 const DONUT_COLORS = [COLORS.indigo, COLORS.sky, COLORS.rose, COLORS.amber, COLORS.emerald]
 
-export function BudgetDonutChart() {
+export function BudgetDonutChart({ data }: { data: ChannelBudgetRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <PieChart>
         <Pie
-          data={channelBudget}
+          data={data}
           dataKey="spent"
           nameKey="channel"
           cx="50%"
@@ -105,7 +150,7 @@ export function BudgetDonutChart() {
           label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
           labelLine={false}
         >
-          {channelBudget.map((_, i) => (
+          {data.map((_, i) => (
             <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
           ))}
         </Pie>
@@ -119,10 +164,10 @@ export function BudgetDonutChart() {
 }
 
 // ─── Budget vs Revenue Bar Chart ──────────────────────────────────────────────
-export function BudgetRevenueChart() {
+export function BudgetRevenueChart({ data }: { data: BudgetRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={budgetData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
         <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
@@ -141,7 +186,7 @@ export function BudgetRevenueChart() {
 }
 
 // ─── Cohort CR Chart ──────────────────────────────────────────────────────────
-export function CohortCrChart({ data }: { data: typeof weeklyPerformance }) {
+export function CohortCrChart({ data }: { data: WeeklyRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -163,10 +208,10 @@ export function CohortCrChart({ data }: { data: typeof weeklyPerformance }) {
 }
 
 // ─── ROI Bar Chart ────────────────────────────────────────────────────────────
-export function RoiChart() {
+export function RoiChart({ data }: { data: BudgetRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <BarChart data={budgetData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
         <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false}
@@ -179,8 +224,8 @@ export function RoiChart() {
   )
 }
 
-// ─── Funnel Visualisation (custom, not recharts) ──────────────────────────────
-export function FunnelViz({ data }: { data: typeof funnelData }) {
+// ─── Funnel Visualisation ─────────────────────────────────────────────────────
+export function FunnelViz({ data }: { data: FunnelRow[] }) {
   return (
     <div className="space-y-2">
       {data.map((item) => (

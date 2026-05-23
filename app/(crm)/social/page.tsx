@@ -141,6 +141,7 @@ export default function SocialPage() {
   const [activeTab, setActiveTab] = useState<TabId>('calendar')
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
@@ -148,6 +149,7 @@ export default function SocialPage() {
   const [connections, setConnections] = useState<SocialConnection[]>([])
   const [publishing, setPublishing] = useState<string | null>(null)
   const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; message: string }> | null>(null)
+  const [useAI, setUseAI] = useState(false)
   const [aiBrief, setAiBrief] = useState('')
   const [aiPlatform, setAiPlatform] = useState('LinkedIn')
   const [aiTone, setAiTone] = useState('Professional')
@@ -248,11 +250,12 @@ export default function SocialPage() {
     setSaving(false)
     if (error) { setError(error.message); return }
     setSuccess(editingPost ? 'Post updated!' : 'Post created!')
+    setSaved(true)
     setForm(emptyForm)
     setSelectedTemplate(null)
     setEditingPost(null)
     fetchPosts()
-    setTimeout(() => setSuccess(null), 3000)
+    setTimeout(() => { setSuccess(null); setSaved(false) }, 3000)
   }
 
   async function deletePost(id: string) {
@@ -736,8 +739,23 @@ export default function SocialPage() {
                       className={`${inputCls} resize-none`} />
                   </div>
 
+                  {/* ── AI Toggle ─────────────────────────────────────────── */}
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-orange-400" />
+                      <span className="text-sm font-medium text-slate-700">Generate caption with AI</span>
+                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Claude</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setUseAI(v => !v)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${useAI ? 'bg-orange-500' : 'bg-gray-200'}`}>
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${useAI ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
                   {/* ── AI Generator ──────────────────────────────────────── */}
-                  <div className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4 space-y-3">
+                  {useAI && <div className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-orange-500" />
                       <h4 className="text-sm font-semibold text-slate-800">Generate Caption with AI</h4>
@@ -795,7 +813,7 @@ export default function SocialPage() {
                         <Check className="h-3 w-3" /> Caption applied below — edit as needed
                       </p>
                     )}
-                  </div>
+                  </div>}
 
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-slate-500">Post Caption <span className="text-red-500">*</span></label>
@@ -808,10 +826,14 @@ export default function SocialPage() {
                   <div className="flex justify-end gap-2 pt-1">
                     <button type="button" onClick={() => { setForm(emptyForm); setSelectedTemplate(null); setEditingPost(null) }}
                       className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Clear</button>
-                    <button type="submit" disabled={saving}
-                      className="flex items-center gap-2 px-6 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors">
+                    <button type="submit" disabled={saving || saved}
+                      className={`flex items-center gap-2 px-6 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        saved ? 'bg-gray-300 text-gray-500 cursor-not-allowed' :
+                        'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50'
+                      }`}>
                       {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      {saving ? 'Saving...' : editingPost ? 'Save Changes' : 'Create Post'}
+                      {saved ? <><Check className="h-3.5 w-3.5" /> Posted!</> :
+                       saving ? 'Saving...' : editingPost ? 'Save Changes' : 'Create Post'}
                     </button>
                   </div>
                 </form>
