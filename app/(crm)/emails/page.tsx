@@ -1,10 +1,11 @@
 ﻿'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
 import { Mail, Send, FileText, X, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
 
-type Contact = { id: string; full_name: string | null; email: string | null }
+type Contact = { contact_id: string; first_name: string; last_name: string | null; email: string | null }
+  & { id: string; full_name: string } // computed helpers
 type SentEmail = {
   id: string
   to_email: string
@@ -20,83 +21,163 @@ type SentEmail = {
 
 const TEMPLATES = [
   {
-    name: 'Initial Intro',
-    subject: 'Thanks for reaching out — next steps',
-    tags: ['New Lead'],
+    name: 'Welcome to Trial',
+    subject: 'Your AgentsPilot trial has started 🚀',
+    stage: 'lead',
+    stageLabel: 'New Lead',
+    stageBg: 'bg-amber-100', stageColor: 'text-amber-700',
+    auto: true,
     body: `Hi {{name}},
 
-Thanks for reaching out to AgentsPilot! I wanted to personally follow up and learn more about what you're working on.
+Welcome — your 14-day free trial of AgentsPilot has just started!
 
-I'd love to schedule a quick 20-minute call to understand your goals and show you how AgentsPilot can help.
+Here's what you can do right now:
+→ Add your first contacts and track their lifecycle
+→ Set up your funnel stages (lead → trial → customer)
+→ Enable automation rules so nothing slips through the cracks
 
-Would any of these times work for you?
-→ Tomorrow at 10am or 2pm
-→ Thursday at 11am or 3pm
-
-Looking forward to connecting!
+If you have any questions getting started, just reply to this email — we're here to help.
 
 Best,
 The AgentsPilot Team`,
   },
   {
-    name: 'Follow-up Day 2',
-    subject: 'Quick follow-up from AgentsPilot',
-    tags: ['Follow-up'],
+    name: 'Activate Your Trial',
+    subject: 'Your trial is waiting — get started in 5 min',
+    stage: 'trial_inactive',
+    stageLabel: 'Trial Inactive',
+    stageBg: 'bg-orange-100', stageColor: 'text-orange-700',
+    auto: true,
     body: `Hi {{name}},
 
-Just wanted to follow up on my previous message — I don't want you to miss out on what AgentsPilot can do for your business.
+We noticed you haven't logged in yet — your AgentsPilot trial is ready and waiting!
 
-Our platform helps teams automate lead gen, track pipelines, and close deals faster.
+It only takes 5 minutes to set up:
+1. Import or add your first leads
+2. Move them through the lifecycle funnel
+3. Turn on one automation rule
 
-Happy to answer any questions — just reply to this email or book a call directly:
-→ [Book a call]
+Need a hand? We offer free 15-min onboarding calls — just reply and we'll book one.
 
 Best,
 The AgentsPilot Team`,
   },
   {
-    name: 'Proposal Ready',
-    subject: 'Your personalised proposal is ready',
-    tags: ['Qualified'],
+    name: 'Trial Mid-Point Check-in',
+    subject: "You're 7 days in — here's a quick tip",
+    stage: 'trial_active',
+    stageLabel: 'Trial Active',
+    stageBg: 'bg-blue-100', stageColor: 'text-blue-700',
+    auto: true,
     body: `Hi {{name}},
 
-Great news — I've put together a personalised proposal based on our conversation.
+You're halfway through your trial — great to see you're exploring AgentsPilot!
 
-Here's what's included:
-• Recommended plan for your team size
-• Pricing breakdown
-• Onboarding timeline
-• ROI projection
+One feature teams love at this stage: **Automation Rules** (Settings → Automations).
 
-I'd love to walk you through it on a call. Let me know when works best for you.
+Set it once and the system will automatically:
+• Follow up with inactive trials
+• Alert you when customers go at-risk
+• Send win-back emails to churned users
+
+Any questions? Just reply — happy to help.
 
 Best,
 The AgentsPilot Team`,
   },
   {
-    name: 'Win-back',
-    subject: "We noticed you haven't responded...",
-    tags: ['Cold'],
+    name: 'Trial Expiring in 3 Days',
+    subject: 'Your trial ends in 3 days — upgrade now',
+    stage: 'trial_expiring',
+    stageLabel: 'Trial Expiring',
+    stageBg: 'bg-red-100', stageColor: 'text-red-600',
+    auto: true,
     body: `Hi {{name}},
 
-I noticed we haven't connected in a while and wanted to check in.
+Just a heads-up — your AgentsPilot trial ends in 3 days.
 
-Has anything changed on your end? We've recently launched some new features that might be a great fit for what you're working on.
+To keep access to everything you've set up, upgrade to a paid plan before your trial expires.
 
-If now isn't the right time, no worries at all — just let me know and I'll follow up in a few months.
+→ [Upgrade now — keep all your data]
+
+Not ready yet? Reply with any questions and we'll make sure you have everything you need to decide.
+
+Best,
+The AgentsPilot Team`,
+  },
+  {
+    name: 'Trial Expired — Win-back',
+    subject: "Your trial has ended — here's a special offer",
+    stage: 'trial_expired',
+    stageLabel: 'Trial Expired',
+    stageBg: 'bg-red-100', stageColor: 'text-red-700',
+    auto: true,
+    body: `Hi {{name}},
+
+Your AgentsPilot trial has ended, but your account and all your data are still here.
+
+We'd love to have you as a customer — and to make it easy, we're offering you 20% off your first month if you upgrade in the next 7 days.
+
+→ [Claim your offer]
+
+If the timing isn't right, no worries — just reply and let me know what would make AgentsPilot a better fit.
+
+Best,
+The AgentsPilot Team`,
+  },
+  {
+    name: 'At-Risk Check-in',
+    subject: "We miss you — is everything okay?",
+    stage: 'at_risk',
+    stageLabel: 'At Risk',
+    stageBg: 'bg-yellow-100', stageColor: 'text-yellow-700',
+    auto: true,
+    body: `Hi {{name}},
+
+We noticed you haven't been active on AgentsPilot recently and wanted to check in.
+
+Is there anything we can help with? Sometimes a quick call is all it takes to unlock the value.
+
+→ [Book a 15-min call]
+
+If something's not working, I'd genuinely love to know — your feedback helps us improve.
+
+Best,
+The AgentsPilot Team`,
+  },
+  {
+    name: 'Churned Win-back',
+    subject: 'We made some improvements — come back?',
+    stage: 'churned',
+    stageLabel: 'Churned',
+    stageBg: 'bg-slate-100', stageColor: 'text-slate-600',
+    auto: true,
+    body: `Hi {{name}},
+
+It's been a while since you used AgentsPilot, and we've been busy making it better.
+
+Since you left, we've shipped:
+• Full SaaS lifecycle funnel (lead → trial → customer)
+• Daily automation rules (no more manual follow-ups)
+• Alarm system for at-risk customers
+
+We'd love to show you what's new — on us. Free 30-day trial, no card needed.
+
+→ [Restart your free trial]
 
 Best,
 The AgentsPilot Team`,
   },
 ]
 
-const statusIcon = {
+const statusIcon: Record<string, React.ReactNode> = {
   sent: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />,
   queued: <Clock className="h-3.5 w-3.5 text-amber-500" />,
   failed: <AlertCircle className="h-3.5 w-3.5 text-red-500" />,
+  draft: <FileText className="h-3.5 w-3.5 text-sky-500" />,
 }
-const statusLabel = { sent: 'Sent', queued: 'Queued', failed: 'Failed' }
-const statusColor = { sent: 'text-emerald-600', queued: 'text-amber-600', failed: 'text-red-600' }
+const statusLabel: Record<string, string> = { sent: 'Sent', queued: 'Queued', failed: 'Failed', draft: 'Draft' }
+const statusColor: Record<string, string> = { sent: 'text-emerald-600', queued: 'text-amber-600', failed: 'text-red-600', draft: 'text-sky-600' }
 
 export default function EmailsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -109,6 +190,7 @@ export default function EmailsPage() {
   const [showContactDrop, setShowContactDrop] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [previewEmail, setPreviewEmail] = useState<SentEmail | null>(null)
+  const [hideOldEmails, setHideOldEmails] = useState(false)
 
   const [form, setForm] = useState({
     to_email: '', to_name: '', subject: '', body: '',
@@ -117,10 +199,14 @@ export default function EmailsPage() {
   useEffect(() => {
     async function load() {
       const [c, e] = await Promise.all([
-        supabase.from('users').select('id,full_name,email').not('email', 'is', null),
+        supabase.from('contacts_current').select('contact_id,first_name,last_name,email').not('email', 'is', null),
         supabase.from('emails').select('*').order('created_at', { ascending: false }).limit(50),
       ])
-      setContacts(c.data ?? [])
+      setContacts((c.data ?? []).map((r: Record<string, unknown>) => ({
+        ...r,
+        id:        r.contact_id,
+        full_name: [r.first_name, r.last_name].filter(Boolean).join(' '),
+      })) as Contact[])
       setSentEmails(e.data ?? [])
       setLoading(false)
     }
@@ -207,7 +293,7 @@ export default function EmailsPage() {
 
   return (
     <div>
-      <Header title="Emails" subtitle="Send and manage outreach emails" />
+      <Header title="Emails" subtitle="Lifecycle outreach — lead, trial, customer, win-back" />
       <div className="p-6 space-y-6">
 
         {/* Setup notice if no Resend key */}
@@ -307,37 +393,60 @@ export default function EmailsPage() {
             </form>
           </div>
 
-          {/* Templates — dark */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
+          {/* Templates */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 flex flex-col">
             <div className="flex items-center gap-2 mb-4">
               <FileText className="h-4 w-4 text-orange-500" />
-              <h2 className="text-sm font-semibold text-slate-900">Email Templates</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Lifecycle Templates</h2>
+              <span className="ml-auto text-xs text-slate-400">{TEMPLATES.length} templates</span>
+              {selectedTemplate && (
+                <button
+                  onClick={() => {
+                    setSelectedTemplate(null)
+                    setForm(f => ({ ...f, subject: '', body: '' }))
+                  }}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-red-500 transition-colors ml-1"
+                  title="Clear template"
+                >
+                  <X className="h-3.5 w-3.5" /> Clear
+                </button>
+              )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 overflow-y-auto max-h-[520px] pr-0.5">
               {TEMPLATES.map(t => (
                 <div key={t.name}
-                  className={`p-3 rounded-lg border transition-all cursor-pointer ${
+                  className={[
+                    'p-3 rounded-lg border transition-all cursor-pointer',
                     selectedTemplate === t.name
-                      ? 'border-orange-500/40 bg-orange-50'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
+                      ? 'border-orange-400 bg-orange-50 shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50',
+                  ].join(' ')}
                   onClick={() => applyTemplate(t)}>
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-slate-900">{t.name}</p>
-                    <div className="flex gap-1">
-                      {t.tags.map(tag => (
-                        <span key={tag} className="text-xs bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full">{tag}</span>
-                      ))}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-sm font-semibold text-slate-800">{t.name}</p>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {t.auto && (
+                        <span className="text-xs px-1.5 py-0.5 rounded font-semibold bg-orange-100 text-orange-600 border border-orange-200">
+                          Auto
+                        </span>
+                      )}
+                      <span className={['text-xs px-2 py-0.5 rounded-full font-medium', t.stageBg, t.stageColor].join(' ')}>
+                        {t.stageLabel}
+                      </span>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-500">{t.subject}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{t.subject}</p>
                   {selectedTemplate === t.name && (
-                    <p className="text-xs text-orange-500 mt-1 font-medium">✓ Applied to compose</p>
+                    <p className="text-xs text-orange-500 mt-1.5 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Applied to composer
+                    </p>
                   )}
                 </div>
               ))}
             </div>
-            <p className="text-xs text-slate-400 mt-3">Click a template to load it into the composer. <code className="bg-gray-100 text-slate-500 px-1 rounded">{'{{name}}'}</code> is auto-replaced.</p>
+            <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-gray-100">
+              Click a template to load it. <code className="bg-gray-100 text-slate-500 px-1 rounded">{'{{name}}'}</code> is replaced with the contact&apos;s first name.
+            </p>
           </div>
         </div>
 
@@ -384,7 +493,20 @@ export default function EmailsPage() {
           <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
             <Mail className="h-4 w-4 text-slate-500" />
             <h2 className="text-sm font-semibold text-slate-900">Email History</h2>
-            <span className="ml-auto text-xs text-slate-400">{sentEmails.filter(e => e.status !== 'draft').length} emails</span>
+            <span className="text-xs text-slate-400">
+              {sentEmails.filter(e => e.status !== 'draft').length} emails
+            </span>
+            <button
+              onClick={() => setHideOldEmails(h => !h)}
+              className={[
+                'ml-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all',
+                hideOldEmails
+                  ? 'bg-orange-500 text-white border-orange-500'
+                  : 'bg-white text-slate-500 border-gray-200 hover:border-orange-300 hover:text-orange-500',
+              ].join(' ')}
+            >
+              {hideOldEmails ? '✓ This week only' : 'This week only'}
+            </button>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
@@ -393,27 +515,50 @@ export default function EmailsPage() {
           ) : sentEmails.filter(e => e.status !== 'draft').length === 0 ? (
             <div className="text-center py-10 text-slate-400 text-sm">No emails sent yet.</div>
           ) : (
+            <>
+            <div className="hidden md:grid grid-cols-[1fr_160px_100px_80px_90px] gap-4 px-5 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-slate-400 uppercase tracking-wide">
+              <span>Recipient</span>
+              <span>Template</span>
+              <span>Subject</span>
+              <span>Status</span>
+              <span className="text-right">Date</span>
+            </div>
             <div className="divide-y divide-gray-50">
-              {sentEmails.filter(e => e.status !== 'draft').map(e => (
-                <div key={e.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+              {sentEmails.filter(e => {
+                if (e.status === 'draft') return false
+                if (hideOldEmails) {
+                  const age = Date.now() - new Date(e.created_at).getTime()
+                  return age <= 7 * 24 * 60 * 60 * 1000
+                }
+                return true
+              }).map(e => (
+                <div key={e.id}
+                  className="grid grid-cols-1 md:grid-cols-[1fr_160px_100px_80px_90px] gap-2 md:gap-4 items-center px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => setPreviewEmail(e)}>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-900 truncate">{e.subject}</p>
-                    <p className="text-xs text-slate-500">{e.to_name ? `${e.to_name} — ` : ''}{e.to_email}</p>
+                  {/* Recipient */}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{e.to_name || e.contact_name || '—'}</p>
+                    <p className="text-xs text-slate-400 truncate">{e.to_email}</p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
-                    {e.template_name && (
-                      <span className="text-xs text-slate-400 hidden md:block">{e.template_name}</span>
-                    )}
-                    <div className={`flex items-center gap-1 text-xs font-medium ${statusColor[e.status]}`}>
-                      {statusIcon[e.status]}
-                      {statusLabel[e.status]}
-                    </div>
-                    <span className="text-xs text-slate-400">{new Date(e.created_at).toLocaleDateString()}</span>
+                  {/* Template */}
+                  <span className="text-xs bg-gray-100 text-slate-600 px-2 py-0.5 rounded-full truncate hidden md:inline-block">
+                    {e.template_name || '—'}
+                  </span>
+                  {/* Subject (truncated) */}
+                  <p className="text-xs text-slate-500 truncate hidden md:block">{e.subject}</p>
+                  {/* Status */}
+                  <div className={`flex items-center gap-1 text-xs font-medium ${statusColor[e.status]}`}>
+                    {statusIcon[e.status]}
+                    <span className="hidden md:inline">{statusLabel[e.status]}</span>
                   </div>
+                  {/* Date */}
+                  <span className="text-xs text-slate-400 md:text-right">
+                    {new Date(e.created_at).toLocaleDateString()}
+                  </span>
                 </div>
               ))}
             </div>
+            </>
           )}
         </div>
 

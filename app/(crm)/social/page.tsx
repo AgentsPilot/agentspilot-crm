@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check, Sparkles, RefreshCw } from 'lucide-react'
+import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check, Sparkles, RefreshCw, BookOpen, Bell, Link2, Copy, CheckCheck, ListChecks } from 'lucide-react'
+import { PostTrackerTable } from '@/app/(crm)/post-tracker/page'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SocialPost = {
@@ -15,10 +16,32 @@ type SocialPost = {
   caption: string
   scheduled_date: string | null
   status: 'draft' | 'scheduled' | 'published'
+  campaign_id: string | null
   created_at: string
 }
 
-type TabId = 'calendar' | 'platform' | 'create'
+type Campaign = {
+  id: string
+  name: string
+  status: string
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+}
+
+type PostTemplate = {
+  id: string
+  title: string
+  platforms: string
+  media_type: string
+  background: string
+  cta: string
+  caption: string
+  sort_order: number
+  active: boolean
+}
+
+type TabId = 'calendar' | 'platform' | 'create' | 'tracker'
 
 type SocialConnection = {
   id: string
@@ -27,8 +50,10 @@ type SocialConnection = {
   expires_at: string | null
 }
 
-// ── Google Sheet templates ─────────────────────────────────────────────────
-const TEMPLATES = [
+// ── Template helpers (DB-driven, replaces hardcoded array) ────────────────
+
+// ── OLD hardcoded array kept as fallback seed (used only if DB is empty) ──
+const FALLBACK_TEMPLATES = [
   {
     collateral: 'Teaser Post #1',
     platforms: 'LinkedIn, Facebook, Instagram, TikTok',
@@ -87,6 +112,8 @@ const TEMPLATES = [
   },
 ]
 
+// ── End fallback templates ─────────────────────────────────────────────────
+
 const ALL_PLATFORMS = ['LinkedIn', 'Facebook', 'Instagram', 'TikTok', 'Website', 'Other']
 
 const platformIcon: Record<string, React.ReactNode> = {
@@ -113,6 +140,8 @@ const statusColor = {
   published: 'bg-emerald-100 text-emerald-700',
 }
 
+const PIPELINE_STAGES = ['Contacted', 'Qualified', 'Proposal Sent', 'Won']
+
 const emptyForm = {
   collateral: '',
   platforms: [] as string[],
@@ -122,6 +151,10 @@ const emptyForm = {
   caption: '',
   scheduled_date: '',
   status: 'draft' as SocialPost['status'],
+  campaign_id: '',
+  // Nurture library
+  add_to_library: false,
+  library_stages: [] as string[],
 }
 
 // ── Month helpers ──────────────────────────────────────────────────────────
@@ -134,11 +167,49 @@ function getFirstDayOfMonth(year: number, month: number) {
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
+// ── UTM Link Box ───────────────────────────────────────────────────────────
+function UtmLinkBox({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard.writeText(link)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <Link2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+        <span className="text-xs font-semibold text-blue-700">UTM Link — paste this in your post</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 text-xs text-blue-800 bg-white border border-blue-200 rounded-lg px-3 py-2 truncate">
+          {link}
+        </code>
+        <button
+          type="button"
+          onClick={copy}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            copied
+              ? 'bg-emerald-500 text-white'
+              : 'bg-blue-500 hover:bg-blue-600 text-white'
+          }`}
+        >
+          {copied ? <><CheckCheck className="h-3.5 w-3.5" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+        </button>
+      </div>
+      <p className="text-xs text-blue-500">
+        When someone clicks this link → their source is tracked in your CRM automatically
+      </p>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function SocialPage() {
-  const [posts, setPosts] = useState<SocialPost[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabId>('calendar')
+  const [posts, setPosts]           = useState<SocialPost[]>([])
+  const [campaigns, setCampaigns]   = useState<Campaign[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [activeTab, setActiveTab]   = useState<TabId>('calendar')
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -155,6 +226,39 @@ export default function SocialPage() {
   const [aiTone, setAiTone] = useState('Professional')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+
+  // Manual LinkedIn setup
+  // ── DB templates state ──────────────────────────────────────────────────
+  const [dbTemplates, setDbTemplates] = useState<PostTemplate[]>([])
+  const [showTemplateManager, setShowTemplateManager] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<PostTemplate | null>(null)
+  const [templateForm, setTemplateForm] = useState({
+    title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: 0,
+  })
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [showTemplateForm, setShowTemplateForm] = useState(false)
+
+  // Use DB templates if loaded, fall back to hardcoded list
+  const activeTemplates: typeof FALLBACK_TEMPLATES = dbTemplates.length > 0
+    ? dbTemplates.filter(t => t.active).map(t => ({
+        collateral: t.title, platforms: t.platforms, media_type: t.media_type,
+        background: t.background, cta: t.cta, caption: t.caption,
+      }))
+    : FALLBACK_TEMPLATES
+
+  const [showLinkedInManual, setShowLinkedInManual] = useState(false)
+  const [liToken, setLiToken] = useState('')
+  const [liName, setLiName] = useState('')
+  const [liMemberId, setLiMemberId] = useState('')
+  const [liSaving, setLiSaving] = useState(false)
+  const [liDebug, setLiDebug] = useState<string | null>(null)
+  const [liDetecting, setLiDetecting] = useState(false)
+
+  const [showTemplatesPanel, setShowTemplatesPanel] = useState(false)
+  const [dayPickerDate, setDayPickerDate] = useState<string | null>(null)
+  const [dayPickerSaving, setDayPickerSaving] = useState(false)
+  const [showOverduePanel, setShowOverduePanel] = useState(false)
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
 
   const now = new Date()
   const [calYear, setCalYear] = useState(now.getFullYear())
@@ -175,9 +279,28 @@ export default function SocialPage() {
     setConnections(data ?? [])
   }
 
+  async function fetchCampaigns() {
+    const { data } = await supabase
+      .from('campaigns')
+      .select('id, name, status, utm_source, utm_medium, utm_campaign')
+      .order('created_at', { ascending: false })
+    setCampaigns(data ?? [])
+  }
+
+  async function fetchTemplates() {
+    const { data } = await supabase
+      .from('post_templates')
+      .select('*')
+      .eq('active', true)
+      .order('sort_order', { ascending: true })
+    if (data && data.length > 0) setDbTemplates(data)
+  }
+
   useEffect(() => {
     fetchPosts()
     fetchConnections()
+    fetchCampaigns()
+    fetchTemplates()
     // Handle OAuth redirect params
     const params = new URLSearchParams(window.location.search)
     if (params.get('connected')) {
@@ -190,6 +313,84 @@ export default function SocialPage() {
       window.history.replaceState({}, '', '/social')
     }
   }, [])
+
+  async function detectMemberId() {
+    if (!liToken.trim()) return
+    setLiDetecting(true)
+    setLiDebug(null)
+    try {
+      const r = await fetch('/api/auth/linkedin/debug-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: liToken.trim() }),
+      })
+      const d = await r.json()
+      setLiDebug(JSON.stringify(d.raw, null, 2))
+      // Try to auto-fill if we find an ID
+      const raw = d.raw
+      const id = raw?.sub ?? raw?.id ?? raw?.memberId ?? raw?.member_id ?? null
+      if (id) {
+        setLiMemberId(String(id))
+        setLiDebug(null)
+      }
+    } catch {
+      setLiDebug('Failed to call debug endpoint')
+    }
+    setLiDetecting(false)
+  }
+
+  async function saveLinkedInManual() {
+    if (!liToken.trim()) return
+    setLiSaving(true)
+
+    // Auto-resolve member ID if not provided
+    let memberId = liMemberId.trim()
+    let displayName = liName.trim()
+    if (!memberId) {
+      try {
+        const r = await fetch('/api/auth/linkedin/resolve-urn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: liToken.trim() }),
+        })
+        const d = await r.json()
+        if (d.memberId) {
+          memberId = d.memberId
+          if (!displayName && d.name) displayName = d.name
+        } else if (d.error === 'MANUAL_ID_REQUIRED') {
+          setError('Could not auto-detect Member ID — please paste it manually in the Member ID field')
+          setLiSaving(false)
+          return
+        } else {
+          setError(d.error ?? 'Could not resolve LinkedIn member ID')
+          setLiSaving(false)
+          return
+        }
+      } catch {
+        setError('Failed to contact LinkedIn API')
+        setLiSaving(false)
+        return
+      }
+    }
+
+    const { error: dbErr } = await supabase.from('social_connections').upsert(
+      {
+        platform: 'linkedin',
+        access_token: liToken.trim(),
+        expires_at: new Date(Date.now() + 5184000 * 1000).toISOString(),
+        platform_user_id: `urn:li:person:${memberId}`,
+        platform_username: displayName || 'LinkedIn',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'platform' }
+    )
+    setLiSaving(false)
+    if (dbErr) { setError(dbErr.message); return }
+    setSuccess('LinkedIn connected!')
+    setShowLinkedInManual(false)
+    setLiToken(''); setLiName(''); setLiMemberId('')
+    fetchConnections()
+  }
 
   async function publishPost(post: SocialPost) {
     setPublishing(post.id)
@@ -217,16 +418,31 @@ export default function SocialPage() {
     return connections.find(c => c.platform === platform.toLowerCase())
   }
 
-  function applyTemplate(t: typeof TEMPLATES[0]) {
-    setForm(f => ({
-      ...f,
-      collateral: t.collateral,
-      platforms: t.platforms.split(', ').map(p => p.trim()),
-      background: t.background,
-      media_type: t.media_type,
-      cta: t.cta,
-      caption: t.caption,
-    }))
+  function applyTemplate(t: typeof FALLBACK_TEMPLATES[0]) {
+    setForm(f => {
+      // If a campaign is already selected, append its UTM to the template caption
+      const LANDING = 'https://agentspilot-marketing.vercel.app/signup'
+      let caption = t.caption
+      if (f.campaign_id) {
+        const camp = campaigns.find(c => c.id === f.campaign_id)
+        if (camp?.utm_source) {
+          const p = new URLSearchParams()
+          p.set('utm_source', camp.utm_source)
+          if (camp.utm_medium)   p.set('utm_medium',   camp.utm_medium)
+          if (camp.utm_campaign) p.set('utm_campaign', camp.utm_campaign)
+          caption = `${t.caption}\n${LANDING}?${p.toString()}`
+        }
+      }
+      return {
+        ...f,
+        collateral: t.collateral,
+        platforms: t.platforms.split(', ').map(p => p.trim()),
+        background: t.background,
+        media_type: t.media_type,
+        cta: t.cta,
+        caption,
+      }
+    })
     setSelectedTemplate(t.collateral)
   }
 
@@ -243,12 +459,27 @@ export default function SocialPage() {
       caption: form.caption,
       scheduled_date: form.scheduled_date || null,
       status: form.status,
+      campaign_id: form.campaign_id || null,
     }
     const { error } = editingPost
       ? await supabase.from('social_posts').update(payload).eq('id', editingPost.id)
       : await supabase.from('social_posts').insert([payload])
     setSaving(false)
     if (error) { setError(error.message); return }
+
+    // ── Also save to content_library if checkbox is checked ──────────────
+    if (form.add_to_library && form.caption && form.library_stages.length > 0) {
+      const contentType = form.media_type.toLowerCase().includes('video') ? 'post'
+        : form.media_type.toLowerCase().includes('case') ? 'case_study'
+        : form.cta ? 'value' : 'post'
+      await supabase.from('content_library').insert({
+        title:           form.collateral,
+        body:            form.caption,
+        type:            contentType,
+        pipeline_stages: form.library_stages,
+      })
+    }
+
     setSuccess(editingPost ? 'Post updated!' : 'Post created!')
     setSaved(true)
     setForm(emptyForm)
@@ -297,6 +528,40 @@ export default function SocialPage() {
     setAiLoading(false)
   }
 
+  // ── Template CRUD ────────────────────────────────────────────────────────
+  function openNewTemplate() {
+    setEditingTemplate(null)
+    setTemplateForm({ title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: dbTemplates.length + 1 })
+    setShowTemplateForm(true)
+  }
+
+  function openEditTemplate(t: PostTemplate) {
+    setEditingTemplate(t)
+    setTemplateForm({ title: t.title, platforms: t.platforms, media_type: t.media_type, background: t.background, cta: t.cta, caption: t.caption, sort_order: t.sort_order })
+    setShowTemplateForm(true)
+  }
+
+  async function saveTemplate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!templateForm.title.trim()) return
+    setTemplateSaving(true)
+    const payload = { ...templateForm, updated_at: new Date().toISOString() }
+    if (editingTemplate) {
+      await supabase.from('post_templates').update(payload).eq('id', editingTemplate.id)
+    } else {
+      await supabase.from('post_templates').insert([{ ...payload, active: true }])
+    }
+    setTemplateSaving(false)
+    setShowTemplateForm(false)
+    setEditingTemplate(null)
+    fetchTemplates()
+  }
+
+  async function deleteTemplate(id: string) {
+    await supabase.from('post_templates').update({ active: false }).eq('id', id)
+    fetchTemplates()
+  }
+
   function startEdit(post: SocialPost) {
     setEditingPost(post)
     setForm({
@@ -308,9 +573,59 @@ export default function SocialPage() {
       caption: post.caption,
       scheduled_date: post.scheduled_date ?? '',
       status: post.status,
+      campaign_id: post.campaign_id ?? '',
+      add_to_library: false,
+      library_stages: [],
     })
     setActiveTab('create')
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function openCreateWithDate(dateStr: string) {
+    setEditingPost(null)
+    setForm(f => ({ ...emptyForm, scheduled_date: dateStr }))
+    setSelectedTemplate(null)
+    setActiveTab('create')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function quickSchedule(template: typeof FALLBACK_TEMPLATES[0] | null, date: string) {
+    setDayPickerSaving(true)
+    const payload = template ? {
+      collateral:     template.collateral,
+      platforms:      template.platforms,
+      background:     template.background,
+      media_type:     template.media_type,
+      cta:            template.cta,
+      caption:        template.caption,
+      scheduled_date: date,
+      status:         'scheduled' as const,
+    } : {
+      collateral:     'New Post',
+      platforms:      '',
+      background:     '',
+      media_type:     '',
+      cta:            '',
+      caption:        '',
+      scheduled_date: date,
+      status:         'draft' as const,
+    }
+    const { error } = await supabase.from('social_posts').insert([payload])
+    setDayPickerSaving(false)
+    if (error) { setError(error.message); return }
+    setDayPickerDate(null)
+    setSuccess(template ? `"${template.collateral}" scheduled for ${date}` : 'Blank post added')
+    fetchPosts()
+    setTimeout(() => setSuccess(null), 3000)
+  }
+
+  function postTypeIcon(mediaType: string) {
+    const m = (mediaType ?? '').toLowerCase()
+    if (m.includes('video') || m.includes('reel')) return '🎬'
+    if (m.includes('static') || m.includes('image') || m.includes('photo')) return '📷'
+    if (m.includes('poll')) return '📊'
+    if (m.includes('carousel')) return '🎠'
+    return '📝'
   }
 
   // Calendar data
@@ -342,10 +657,16 @@ export default function SocialPage() {
   })
 
   // Stats
-  const totalPosts = posts.length
+  const totalPosts     = posts.length
   const scheduledCount = posts.filter(p => p.status === 'scheduled').length
   const publishedCount = posts.filter(p => p.status === 'published').length
-  const draftCount = posts.filter(p => p.status === 'draft').length
+  const draftCount     = posts.filter(p => p.status === 'draft').length
+  const unplannedPosts = posts.filter(p => !p.scheduled_date && p.status !== 'published')
+  const plannedCount   = Object.values(postsByDay).flat().length
+  const todayStr     = new Date().toISOString().split('T')[0]  // "2026-05-23"
+  const overduePosts = posts.filter(p =>
+    p.status === 'scheduled' && p.scheduled_date && p.scheduled_date < todayStr
+  )
 
   const inputCls = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700'
 
@@ -353,6 +674,7 @@ export default function SocialPage() {
     { id: 'calendar' as TabId, label: 'Monthly Calendar', icon: Calendar },
     { id: 'platform' as TabId, label: 'By Platform', icon: LayoutGrid },
     { id: 'create' as TabId, label: editingPost ? 'Edit Post' : 'Create Post', icon: PenSquare },
+    { id: 'tracker' as TabId, label: 'Post Tracker', icon: ListChecks },
   ]
 
   return (
@@ -362,104 +684,122 @@ export default function SocialPage() {
         subtitle={`${totalPosts} posts · ${scheduledCount} scheduled · ${publishedCount} published`}
       />
 
-      {/* Admin badge */}
-      <div className="px-6 pt-4">
+      {/* Admin badge + connection indicators */}
+      <div className="px-6 pt-4 flex items-center gap-3 flex-wrap">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
           🔐 Admin Only
         </span>
-      </div>
-
-      {/* Tab bar */}
-      <div className="sticky top-16 z-30 border-b border-gray-200 bg-white px-6 mt-3">
-        <div className="flex gap-1">
-          {TABS.map(tab => {
-            const Icon = tab.icon
-            const active = activeTab === tab.id
+        {/* Platform connection dots */}
+        <div className="flex items-center gap-2">
+          {[
+            { key: 'linkedin',  label: 'in', color: 'bg-blue-600',   ring: 'ring-blue-300',   connectHref: null },
+            { key: 'facebook',  label: 'f',  color: 'bg-indigo-600', ring: 'ring-indigo-300', connectHref: '/api/auth/facebook' },
+            { key: 'instagram', label: 'ig', color: 'bg-pink-500',   ring: 'ring-pink-300',   connectHref: '/api/auth/instagram' },
+            { key: 'tiktok',    label: 'tk', color: 'bg-slate-900',  ring: 'ring-slate-400',  connectHref: '/api/auth/tiktok' },
+          ].map(p => {
+            const connected = isConnected(p.key)
+            const handleClick = () => {
+              if (p.key === 'linkedin') { setShowLinkedInManual(true); return }
+              if (!connected && p.connectHref) window.location.href = p.connectHref
+            }
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
-                  active ? 'border-orange-500 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-gray-300'
-                }`}>
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
+              <div key={p.key} className="relative group">
+                <button
+                  onClick={handleClick}
+                  title={connected ? `${p.key} connected — click to re-connect` : `Connect ${p.key}`}
+                  className={`h-7 w-7 rounded-full ${p.color} flex items-center justify-center text-white text-xs font-bold transition-all hover:scale-110 ${connected ? `ring-2 ${p.ring}` : 'opacity-40 hover:opacity-70'}`}>
+                  {p.label}
+                </button>
+                {connected && (
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white pointer-events-none" />
+                )}
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block text-xs bg-slate-800 text-white px-2 py-0.5 rounded whitespace-nowrap z-10 pointer-events-none">
+                  {p.key.charAt(0).toUpperCase() + p.key.slice(1)}: {connected ? 'Connected ✓' : 'Click to connect'}
+                </span>
+              </div>
             )
           })}
         </div>
       </div>
 
-      <div className="p-6 space-y-6">
-
-        {/* Connected Accounts */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-800">Connected Accounts</h3>
-            <span className="text-xs text-slate-400">{connections.length} connected</span>
+      {/* Tab bar */}
+      <div className="sticky top-16 z-30 border-b border-gray-200 bg-white px-6 mt-3">
+        <div className="flex items-center">
+          <div className="flex gap-1 flex-1">
+            {TABS.map(tab => {
+              const Icon = tab.icon
+              const active = activeTab === tab.id
+              return (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                    active ? 'border-orange-500 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-gray-300'
+                  }`}>
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              )
+            })}
           </div>
-          <div className="flex flex-wrap gap-3">
-            {/* LinkedIn */}
-            {isConnected('linkedin') ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
-                <div className="h-6 w-6 rounded bg-blue-600 flex items-center justify-center text-white text-xs font-bold">in</div>
-                <div>
-                  <p className="text-xs font-medium text-blue-800">LinkedIn</p>
-                  <p className="text-xs text-blue-500">{getConnection('linkedin')?.platform_username}</p>
-                </div>
-                <Check className="h-3.5 w-3.5 text-emerald-500 ml-1" />
-              </div>
-            ) : (
-              <a href="/api/auth/linkedin"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-blue-300 hover:bg-blue-50 transition-colors cursor-pointer">
-                <div className="h-6 w-6 rounded bg-blue-600 flex items-center justify-center text-white text-xs font-bold">in</div>
-                <div>
-                  <p className="text-xs font-medium text-slate-700">LinkedIn</p>
-                  <p className="text-xs text-blue-500 font-medium">Connect →</p>
-                </div>
-              </a>
-            )}
-            {/* Facebook */}
-            {isConnected('facebook') ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
-                <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">f</div>
-                <div>
-                  <p className="text-xs font-medium text-indigo-800">Facebook</p>
-                  <p className="text-xs text-indigo-500">{getConnection('facebook')?.platform_username}</p>
-                </div>
-                <Check className="h-3.5 w-3.5 text-emerald-500 ml-1" />
-              </div>
-            ) : (
-              <a href="/api/auth/facebook"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer">
-                <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">f</div>
-                <div>
-                  <p className="text-xs font-medium text-slate-700">Facebook</p>
-                  <p className="text-xs text-indigo-500 font-medium">Connect →</p>
-                </div>
-              </a>
-            )}
 
-            {/* Instagram */}
-            {isConnected('instagram') ? (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-50 border border-pink-200">
-                <div className="h-6 w-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold">ig</div>
-                <div>
-                  <p className="text-xs font-medium text-pink-800">Instagram</p>
-                  <p className="text-xs text-pink-500">{getConnection('instagram')?.platform_username}</p>
+          {/* Overdue alarm bell — always visible */}
+          <div className="relative ml-2 pb-1">
+            <button
+              onClick={() => setShowOverduePanel(v => !v)}
+              className={`relative p-2 rounded-lg transition-colors ${
+                overduePosts.length > 0
+                  ? 'text-red-500 hover:bg-red-50'
+                  : 'text-slate-300 hover:bg-gray-100'
+              }`}
+              title={overduePosts.length > 0 ? `${overduePosts.length} overdue post${overduePosts.length > 1 ? 's' : ''}` : 'No overdue posts'}>
+              <Bell className={`h-5 w-5 ${overduePosts.length > 0 ? 'animate-pulse' : ''}`} />
+              {overduePosts.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold">
+                  {overduePosts.length}
+                </span>
+              )}
+            </button>
+
+            {/* Dropdown */}
+            {showOverduePanel && (
+              <div className="absolute right-0 top-12 z-50 w-80 bg-white rounded-xl shadow-2xl border border-red-100 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-red-50 border-b border-red-100">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-red-500" />
+                    <p className="text-sm font-semibold text-red-700">Overdue Posts</p>
+                    <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">{overduePosts.length}</span>
+                  </div>
+                  <button onClick={() => setShowOverduePanel(false)}><X className="h-4 w-4 text-slate-400" /></button>
                 </div>
-                <Check className="h-3.5 w-3.5 text-emerald-500 ml-1" />
+                <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                  {overduePosts.map(post => (
+                    <button key={post.id}
+                      onClick={() => { setShowOverduePanel(false); setActiveTab('platform') }}
+                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left">
+                      <span className="text-lg mt-0.5">{postTypeIcon(post.media_type)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{post.collateral}</p>
+                        <p className="text-xs text-slate-500 truncate">{post.platforms}</p>
+                        <p className="text-xs text-red-500 font-medium mt-0.5">
+                          Due: {new Date(post.scheduled_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                      <span className="text-xs text-orange-500 font-medium shrink-0 mt-1">Publish →</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+                  <button onClick={() => { setShowOverduePanel(false); setActiveTab('platform') }}
+                    className="text-xs font-medium text-orange-600 hover:text-orange-700">
+                    Go to By Platform to publish →
+                  </button>
+                </div>
               </div>
-            ) : (
-              <a href="/api/auth/instagram"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-pink-300 hover:bg-pink-50 transition-colors cursor-pointer">
-                <div className="h-6 w-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold">ig</div>
-                <div>
-                  <p className="text-xs font-medium text-slate-700">Instagram</p>
-                  <p className="text-xs text-pink-500 font-medium">Connect →</p>
-                </div>
-              </a>
             )}
           </div>
         </div>
+      </div>
+
+      <div className="p-6 space-y-6">
 
         {/* Publish results banner */}
         {publishResults && (
@@ -503,156 +843,408 @@ export default function SocialPage() {
           </div>
         )}
 
-        {/* ── CALENDAR TAB ─────────────────────────────────────────────── */}
+        {/* ── CALENDAR / PLANNER TAB ───────────────────────────────────── */}
         {activeTab === 'calendar' && (
-          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-            {/* Month nav */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) }}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <ChevronLeft className="h-5 w-5 text-slate-500" />
-              </button>
-              <h2 className="text-sm font-semibold text-slate-900">{MONTH_NAMES[calMonth]} {calYear}</h2>
-              <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) }}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <ChevronRight className="h-5 w-5 text-slate-500" />
-              </button>
-            </div>
+          <div className="space-y-4">
 
-            {/* Day headers */}
-            <div className="grid grid-cols-7 border-b border-gray-100">
-              {DAY_NAMES.map(d => (
-                <div key={d} className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  {d}
+            {/* Calendar card */}
+            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) }}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <ChevronLeft className="h-5 w-5 text-slate-500" />
+                  </button>
+                  <h2 className="text-sm font-semibold text-slate-900 w-36 text-center">{MONTH_NAMES[calMonth]} {calYear}</h2>
+                  <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) }}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                    <ChevronRight className="h-5 w-5 text-slate-500" />
+                  </button>
+
                 </div>
-              ))}
-            </div>
 
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7">
-              {/* Empty cells before first day */}
-              {Array.from({ length: firstDay }).map((_, i) => (
-                <div key={`empty-${i}`} className="border-r border-b border-gray-100 min-h-24 bg-gray-50/50" />
-              ))}
-              {calendarDays.map(day => {
-                const dayPosts = postsByDay[day] ?? []
-                const isToday = calYear === now.getFullYear() && calMonth === now.getMonth() && day === now.getDate()
-                return (
-                  <div key={day} className={`border-r border-b border-gray-100 min-h-24 p-2 ${isToday ? 'bg-orange-50/40' : 'hover:bg-gray-50/50'} transition-colors`}>
-                    <div className={`text-xs font-semibold mb-1 h-5 w-5 flex items-center justify-center rounded-full ${
-                      isToday ? 'bg-orange-500 text-white' : 'text-slate-500'
-                    }`}>{day}</div>
-                    <div className="space-y-0.5">
-                      {dayPosts.slice(0, 3).map(post => {
-                        const platforms = post.platforms.split(',').map(p => p.trim())
-                        return (
-                          <div key={post.id}
-                            onClick={() => startEdit(post)}
-                            className={`text-xs px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity ${statusColor[post.status]}`}
-                            title={post.collateral}>
-                            {post.collateral.length > 18 ? post.collateral.slice(0, 18) + '…' : post.collateral}
-                          </div>
-                        )
-                      })}
-                      {dayPosts.length > 3 && (
-                        <div className="text-xs text-slate-400 px-1">+{dayPosts.length - 3} more</div>
-                      )}
-                    </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowTemplatesPanel(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                      showTemplatesPanel
+                        ? 'bg-orange-50 border-orange-300 text-orange-600'
+                        : 'border-gray-200 text-slate-600 hover:border-orange-300 hover:text-orange-500'
+                    }`}>
+                    <BookOpen className="h-3.5 w-3.5" /> Templates
+                  </button>
+                  <button onClick={() => openCreateWithDate('')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+                    <Plus className="h-3.5 w-3.5" /> New Post
+                  </button>
+                </div>
+              </div>
+
+              {/* Templates quick-pick panel */}
+              {showTemplatesPanel && (
+                <div className="border-b border-orange-100 px-6 py-3 bg-orange-50/50">
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Click a template to load it into New Post</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {activeTemplates.map(t => (
+                      <button key={t.collateral}
+                        onClick={() => { applyTemplate(t); setActiveTab('create'); setShowTemplatesPanel(false) }}
+                        className="shrink-0 flex flex-col gap-0.5 px-3 py-2 rounded-lg border border-orange-200 bg-white hover:border-orange-400 hover:bg-orange-50 transition-colors text-left min-w-[150px]">
+                        <span className="text-xs font-semibold text-slate-800 truncate w-full">{t.collateral}</span>
+                        <span className="text-xs text-slate-400">{postTypeIcon(t.media_type)} {t.media_type}</span>
+                      </button>
+                    ))}
                   </div>
-                )
-              })}
-            </div>
-
-            {/* Legend */}
-            <div className="px-6 py-3 border-t border-gray-100 flex items-center gap-4">
-              {[
-                { label: 'Draft', cls: 'bg-gray-100 text-gray-600' },
-                { label: 'Scheduled', cls: 'bg-amber-100 text-amber-700' },
-                { label: 'Published', cls: 'bg-emerald-100 text-emerald-700' },
-              ].map(s => (
-                <div key={s.label} className="flex items-center gap-1.5">
-                  <span className={`text-xs px-2 py-0.5 rounded font-medium ${s.cls}`}>{s.label}</span>
                 </div>
-              ))}
-              <button onClick={() => setActiveTab('create')}
-                className="ml-auto flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700">
-                <Plus className="h-3.5 w-3.5" /> Add post
-              </button>
-            </div>
-          </div>
-        )}
+              )}
 
-        {/* ── BY PLATFORM TAB ──────────────────────────────────────────── */}
-        {activeTab === 'platform' && (
-          <div className="space-y-6">
-            {ALL_PLATFORMS.filter(pl => platformGroups[pl]?.length > 0).map(platform => (
-              <div key={platform} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-                  <div className={`h-7 w-7 rounded-lg ${platformColor[platform]} flex items-center justify-center text-white`}>
-                    {platformIcon[platform]}
-                  </div>
-                  <h2 className="text-sm font-semibold text-slate-900">{platform}</h2>
-                  <span className="text-xs text-slate-400">{platformGroups[platform].length} post{platformGroups[platform].length !== 1 ? 's' : ''}</span>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {platformGroups[platform].map(post => (
-                    <div key={post.id} className="flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-medium text-slate-900">{post.collateral}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[post.status]}`}>
-                            {post.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mb-1">{post.media_type}</p>
-                        <p className="text-xs text-slate-600 line-clamp-2">{post.caption}</p>
-                        {post.cta && <p className="text-xs text-orange-500 mt-1">{post.cta}</p>}
-                      </div>
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        {post.scheduled_date && (
-                          <span className="text-xs text-slate-400">{new Date(post.scheduled_date).toLocaleDateString()}</span>
+              {/* Day headers */}
+              <div className="grid grid-cols-7 border-b border-gray-100">
+                {DAY_NAMES.map(d => (
+                  <div key={d} className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide">{d}</div>
+                ))}
+              </div>
+
+              {/* Calendar grid */}
+              <div className="grid grid-cols-7">
+                {Array.from({ length: firstDay }).map((_, i) => (
+                  <div key={`empty-${i}`} className="border-r border-b border-gray-100 min-h-28 bg-gray-50/30" />
+                ))}
+                {calendarDays.map(day => {
+                  const dayPosts = postsByDay[day] ?? []
+                  const isToday  = calYear === now.getFullYear() && calMonth === now.getMonth() && day === now.getDate()
+                  const dateStr  = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                  const hasPost  = dayPosts.length > 0
+                  const mainPost = dayPosts[0]
+
+                  // Cell background based on primary post status
+                  const cellBg = hasPost
+                    ? mainPost.status === 'published' ? 'bg-emerald-50 border-emerald-200'
+                    : mainPost.status === 'scheduled' ? 'bg-amber-50 border-amber-200'
+                    : 'bg-gray-50 border-gray-200'
+                    : isToday ? 'bg-orange-50/40 border-gray-100' : 'bg-white border-gray-100'
+
+                  return (
+                    <div key={day}
+                      onClick={() => { if (!hasPost) setDayPickerDate(dateStr) }}
+                      className={`border-r border-b ${cellBg} min-h-28 p-2 transition-colors group ${!hasPost ? 'cursor-pointer hover:bg-orange-50/30' : ''}`}>
+
+                      {/* Day number */}
+                      <div className="flex items-start justify-between mb-1.5">
+                        <div className={`text-xs font-bold h-5 w-5 flex items-center justify-center rounded-full ${
+                          isToday ? 'bg-orange-500 text-white' : hasPost ? 'text-slate-700' : 'text-slate-400'
+                        }`}>{day}</div>
+                        {!hasPost && <Plus className="h-3 w-3 text-slate-200 group-hover:text-orange-400 transition-colors" />}
+                        {hasPost && dayPosts.length > 1 && (
+                          <span className="text-xs font-semibold text-slate-500 bg-white/70 rounded px-1">{dayPosts.length}</span>
                         )}
-                        <div className="flex items-center gap-1.5">
-                          <select value={post.status}
-                            onChange={e => updateStatus(post.id, e.target.value as SocialPost['status'])}
-                            className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-orange-500">
-                            <option value="draft">Draft</option>
-                            <option value="scheduled">Scheduled</option>
-                            <option value="published">Published</option>
-                          </select>
-                          {post.status !== 'published' && (
-                            <button
-                              onClick={() => publishPost(post)}
-                              disabled={publishing === post.id}
-                              className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                              {publishing === post.id
-                                ? <Loader2 className="h-3 w-3 animate-spin" />
-                                : <><span className="text-xs font-bold">in</span> Publish</>
-                              }
-                            </button>
-                          )}
-                          <button onClick={() => startEdit(post)} className="text-slate-400 hover:text-orange-500 transition-colors">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button onClick={() => deletePost(post.id)} className="text-slate-400 hover:text-red-500 transition-colors">
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
                       </div>
+
+                      {/* Posts */}
+                      <div className="space-y-1">
+                        {dayPosts.slice(0, 2).map((post, i) => (
+                          <div key={post.id}
+                            onClick={e => { e.stopPropagation(); startEdit(post) }}
+                            className="cursor-pointer hover:opacity-80 transition-opacity">
+                            {/* Type + title */}
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <span className="text-sm leading-none">{postTypeIcon(post.media_type)}</span>
+                              <span className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                                {post.collateral.length > 14 ? post.collateral.slice(0, 14) + '…' : post.collateral}
+                              </span>
+                            </div>
+                            {/* Platforms */}
+                            {i === 0 && (
+                              <p className="text-xs text-slate-500 truncate leading-tight pl-5">
+                                {post.platforms.split(',').map(p => p.trim()).join(' · ')}
+                              </p>
+                            )}
+                            {/* Status pill */}
+                            {i === 0 && (
+                              <span className={`inline-block mt-1 text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColor[post.status]}`}>
+                                {post.status}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {dayPosts.length > 2 && (
+                          <div className="text-xs text-slate-400 font-medium">+{dayPosts.length - 2} more</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Legend */}
+              <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/40 flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  {[
+                    { label: 'Draft',     cls: 'bg-gray-100 text-gray-600' },
+                    { label: 'Scheduled', cls: 'bg-amber-100 text-amber-700' },
+                    { label: 'Published', cls: 'bg-emerald-100 text-emerald-700' },
+                  ].map(s => (
+                    <span key={s.label} className={`text-xs px-2 py-0.5 rounded font-medium ${s.cls}`}>{s.label}</span>
+                  ))}
+                </div>
+                <span className="ml-auto text-xs text-slate-400">🎬 Video &nbsp;·&nbsp; 📷 Image &nbsp;·&nbsp; 📊 Poll &nbsp;·&nbsp; 📝 Text</span>
+              </div>
+            </div>
+
+            {/* Unplanned posts strip */}
+            {unplannedPosts.length > 0 && (
+              <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/30 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-700">⏳ Unplanned Posts</span>
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{unplannedPosts.length} not scheduled</span>
+                  </div>
+                  <span className="text-xs text-slate-400">Click any post to add a date →</span>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-1">
+                  {unplannedPosts.map(post => (
+                    <div key={post.id}
+                      onClick={() => startEdit(post)}
+                      className="shrink-0 flex flex-col gap-1.5 p-3 rounded-lg border border-amber-200 bg-white hover:border-orange-400 hover:shadow-sm transition-all cursor-pointer min-w-[160px] max-w-[180px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{postTypeIcon(post.media_type)}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColor[post.status]}`}>{post.status}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-800 leading-tight line-clamp-2">{post.collateral}</p>
+                      <p className="text-xs text-slate-400 truncate">{post.platforms}</p>
                     </div>
                   ))}
                 </div>
               </div>
-            ))}
-            {Object.values(platformGroups).every(g => g.length === 0) && (
-              <div className="rounded-xl border border-gray-200 bg-white py-16 text-center">
-                <p className="text-sm text-slate-400">No posts yet — create your first post</p>
-                <button onClick={() => setActiveTab('create')}
-                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
-                  <Plus className="h-4 w-4" /> Create Post
-                </button>
-              </div>
             )}
+
+            {/* Bottom stats bar */}
+            <div className="rounded-xl border border-gray-200 bg-white px-6 py-3 flex items-center gap-6 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                <span className="text-xs text-slate-600"><span className="font-semibold text-slate-900">{plannedCount}</span> Planned this month</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                <span className="text-xs text-slate-600"><span className="font-semibold text-slate-900">{unplannedPosts.length}</span> Unplanned</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-400" />
+                <span className="text-xs text-slate-600"><span className="font-semibold text-slate-900">{publishedCount}</span> Published</span>
+              </div>
+              <button onClick={() => openCreateWithDate('')}
+                className="ml-auto flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700">
+                <Plus className="h-3.5 w-3.5" /> Add post
+              </button>
+            </div>
+
+          </div>
+        )}
+
+        {/* ── PUBLISH HUB TAB ──────────────────────────────────────────── */}
+        {activeTab === 'platform' && (
+          <div className="space-y-4">
+
+            {/* ── LEVEL 1: Platform cards — ready to publish ── */}
+            {!selectedPlatform && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Publish Hub</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Select a platform to publish ready posts</p>
+                  </div>
+                  <button onClick={() => setActiveTab('create')}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+                    <Plus className="h-4 w-4" /> New Post
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {ALL_PLATFORMS.map(platform => {
+                    const pPosts    = platformGroups[platform] ?? []
+                    const ready     = pPosts.filter(p => p.status === 'scheduled')
+                    const overdue   = ready.filter(p => p.scheduled_date && p.scheduled_date < todayStr)
+                    const published = pPosts.filter(p => p.status === 'published').length
+                    const conn      = isConnected(platform.toLowerCase())
+                    const hasReady  = ready.length > 0
+
+                    return (
+                      <div key={platform}
+                        onClick={() => hasReady && setSelectedPlatform(platform)}
+                        className={`rounded-xl border p-5 transition-all ${
+                          hasReady
+                            ? 'bg-white border-gray-200 cursor-pointer hover:border-orange-300 hover:shadow-md'
+                            : 'bg-gray-50 border-gray-100 opacity-60'
+                        }`}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-10 w-10 rounded-xl ${platformColor[platform]} flex items-center justify-center text-white shadow-sm`}>
+                              {platformIcon[platform]}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{platform}</p>
+                              <p className="text-xs text-slate-400">{published} published</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            {['linkedin','facebook','instagram','tiktok'].includes(platform.toLowerCase()) && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${conn ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                {conn ? '● Connected' : '○ Not connected'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Ready to publish count */}
+                        <div className={`rounded-xl p-3 text-center mb-3 ${
+                          overdue.length > 0 ? 'bg-red-50 border border-red-200' :
+                          hasReady ? 'bg-blue-50 border border-blue-200' :
+                          'bg-gray-50 border border-gray-100'
+                        }`}>
+                          <p className={`text-2xl font-bold ${
+                            overdue.length > 0 ? 'text-red-600' :
+                            hasReady ? 'text-blue-600' : 'text-slate-400'
+                          }`}>{ready.length}</p>
+                          <p className={`text-xs font-medium ${
+                            overdue.length > 0 ? 'text-red-500' :
+                            hasReady ? 'text-blue-500' : 'text-slate-400'
+                          }`}>
+                            {overdue.length > 0 ? `${overdue.length} overdue!` : hasReady ? 'ready to publish' : 'nothing to publish'}
+                          </p>
+                        </div>
+
+                        {/* CTA */}
+                        {!conn && ['linkedin','facebook','instagram','tiktok'].includes(platform.toLowerCase()) ? (
+                          <button onClick={e => {
+                            e.stopPropagation()
+                            if (platform.toLowerCase() === 'linkedin') setShowLinkedInManual(true)
+                            else window.location.href = `/api/auth/${platform.toLowerCase()}`
+                          }}
+                            className="w-full py-2 text-xs font-medium text-blue-500 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                            Connect account →
+                          </button>
+                        ) : hasReady ? (
+                          <div className="w-full py-2 text-xs font-semibold text-center text-orange-500 border border-orange-200 rounded-lg">
+                            Publish {ready.length} post{ready.length > 1 ? 's' : ''} →
+                          </div>
+                        ) : (
+                          <div className="w-full py-2 text-xs text-center text-slate-400">
+                            All caught up ✓
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* ── LEVEL 2: Publish posts for selected platform ── */}
+            {selectedPlatform && (() => {
+              const pPosts     = platformGroups[selectedPlatform] ?? []
+              const readyPosts = pPosts.filter(p => p.status === 'scheduled')
+              const conn       = isConnected(selectedPlatform.toLowerCase())
+              return (
+                <div className="space-y-4">
+                  {/* Breadcrumb */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setSelectedPlatform(null)}
+                        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-orange-600 transition-colors font-medium">
+                        <ChevronLeft className="h-4 w-4" /> Publish Hub
+                      </button>
+                      <span className="text-slate-300">/</span>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-6 w-6 rounded-lg ${platformColor[selectedPlatform]} flex items-center justify-center text-white`}>
+                          {platformIcon[selectedPlatform]}
+                        </div>
+                        <span className="text-sm font-semibold text-slate-900">{selectedPlatform}</span>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                          {readyPosts.length} ready
+                        </span>
+                      </div>
+                    </div>
+                    <button onClick={() => setActiveTab('create')}
+                      className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+                      <Plus className="h-4 w-4" /> New Post
+                    </button>
+                  </div>
+
+                  {readyPosts.length === 0 ? (
+                    <div className="rounded-xl border border-gray-200 bg-white py-16 text-center space-y-2">
+                      <p className="text-2xl">✓</p>
+                      <p className="text-sm font-semibold text-slate-700">Nothing to publish for {selectedPlatform}</p>
+                      <p className="text-xs text-slate-400">Schedule posts in Post Tracker or create a new one</p>
+                      <button onClick={() => setActiveTab('create')}
+                        className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
+                        <Plus className="h-4 w-4" /> Create Post
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {readyPosts.map(post => {
+                        const isOverduePost = post.scheduled_date && post.scheduled_date < todayStr
+                        return (
+                          <div key={post.id} className={`rounded-xl border bg-white p-5 flex items-center gap-4 hover:shadow-md transition-all ${
+                            isOverduePost ? 'border-red-300 bg-red-50/20' : 'border-gray-200'
+                          }`}>
+                            {/* Icon */}
+                            <div className="text-2xl shrink-0">{postTypeIcon(post.media_type)}</div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{post.collateral}</p>
+                                {isOverduePost && (
+                                  <span className="shrink-0 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                    <Bell className="h-3 w-3" /> Overdue
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-400 truncate">{post.caption.slice(0, 100)}{post.caption.length > 100 ? '…' : ''}</p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {post.scheduled_date
+                                  ? `Scheduled: ${new Date(post.scheduled_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                                  : 'No date set'}
+                              </p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button onClick={() => startEdit(post)}
+                                className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors">
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              {conn ? (
+                                <button
+                                  onClick={() => publishPost(post)}
+                                  disabled={publishing === post.id}
+                                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50 ${
+                                    isOverduePost
+                                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  }`}>
+                                  {publishing === post.id
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : platformIcon[selectedPlatform]
+                                  }
+                                  {publishing === post.id ? 'Publishing...' : isOverduePost ? 'Publish Now!' : 'Publish'}
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic px-3">Connect account first</span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
           </div>
         )}
 
@@ -663,10 +1255,51 @@ export default function SocialPage() {
             {/* Templates panel */}
             <div className="lg:col-span-1">
               <div className="rounded-xl border border-gray-200 bg-white p-5">
-                <h3 className="text-sm font-semibold text-slate-900 mb-1">Post Templates</h3>
-                <p className="text-xs text-slate-400 mb-4">From your social campaign programme — click to load</p>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-sm font-semibold text-slate-900">Post Templates</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateManager(v => !v)}
+                    className="text-xs text-orange-500 hover:text-orange-700 font-medium flex items-center gap-1">
+                    <Pencil className="h-3 w-3" />
+                    {showTemplateManager ? 'Done' : 'Manage'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  {dbTemplates.length > 0 ? `${activeTemplates.length} templates from CRM` : 'Using built-in templates — run migration to enable CRM templates'}
+                </p>
+
+                {/* Template manager (add/edit/delete) */}
+                {showTemplateManager && (
+                  <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-orange-700">Manage Templates</span>
+                      <button type="button" onClick={openNewTemplate}
+                        className="flex items-center gap-1 text-xs font-medium bg-orange-500 text-white px-2 py-1 rounded-lg hover:bg-orange-600">
+                        <Plus className="h-3 w-3" /> New
+                      </button>
+                    </div>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {dbTemplates.filter(t => t.active).map(t => (
+                        <div key={t.id} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-orange-100">
+                          <span className="text-xs text-slate-700 flex-1 truncate">{t.title}</span>
+                          <button type="button" onClick={() => openEditTemplate(t)} className="text-slate-400 hover:text-orange-500">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button type="button" onClick={() => deleteTemplate(t.id)} className="text-slate-400 hover:text-red-500">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {dbTemplates.filter(t => t.active).length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-2">No templates yet — click New above</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  {TEMPLATES.map(t => (
+                  {activeTemplates.map(t => (
                     <div key={t.collateral}
                       onClick={() => applyTemplate(t)}
                       className={`p-3 rounded-lg border cursor-pointer transition-all ${
@@ -708,6 +1341,52 @@ export default function SocialPage() {
                       <label className="text-xs font-medium text-slate-500">Post Title / Collateral <span className="text-red-500">*</span></label>
                       <input required value={form.collateral} onChange={e => setForm(f => ({ ...f, collateral: e.target.value }))}
                         placeholder="e.g. Teaser Post #1" className={inputCls} />
+                    </div>
+
+                    {/* Campaign selector */}
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <label className="text-xs font-medium text-slate-500">Campaign <span className="text-slate-400">(optional)</span></label>
+                      <select
+                        value={form.campaign_id}
+                        onChange={e => {
+                          const newCampaignId = e.target.value
+                          const LANDING = 'https://agentspilot-marketing.vercel.app/signup'
+
+                          // Build new UTM link for the newly selected campaign
+                          const buildUtm = (campId: string) => {
+                            const camp = campaigns.find(c => c.id === campId)
+                            if (!camp?.utm_source) {
+                              const src = form.platforms[0]?.toLowerCase().replace(/\s/g, '') ?? 'social'
+                              const slug = form.collateral.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'post'
+                              return `${LANDING}?utm_source=${src}&utm_medium=social&utm_campaign=${slug}`
+                            }
+                            const p = new URLSearchParams()
+                            p.set('utm_source', camp.utm_source)
+                            if (camp.utm_medium)   p.set('utm_medium',   camp.utm_medium)
+                            if (camp.utm_campaign) p.set('utm_campaign', camp.utm_campaign)
+                            return `${LANDING}?${p.toString()}`
+                          }
+
+                          // Strip any previously appended UTM link from caption
+                          const stripUtm = (caption: string) =>
+                            caption.replace(/\n+https?:\/\/[^\s]+utm_[^\s]*/g, '').trimEnd()
+
+                          setForm(f => {
+                            const cleanCaption = stripUtm(f.caption)
+                            const newCaption = newCampaignId
+                              ? `${cleanCaption}\n${buildUtm(newCampaignId)}`
+                              : cleanCaption
+                            return { ...f, campaign_id: newCampaignId, caption: newCaption }
+                          })
+                        }}
+                        className={inputCls}>
+                        <option value="">— No campaign —</option>
+                        {campaigns.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.status !== 'active' ? `(${c.status})` : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Platform checkboxes */}
@@ -759,6 +1438,22 @@ export default function SocialPage() {
                       </select>
                     </div>
                   </div>
+
+                  {/* ── UTM confirmation strip ───────────────────────────── */}
+                  {form.campaign_id && (() => {
+                    const camp = campaigns.find(c => c.id === form.campaign_id)
+                    if (!camp) return null
+                    return (
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 flex items-center gap-2">
+                        <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        <p className="text-xs text-emerald-700">
+                          <span className="font-semibold">UTM link auto-added</span> to caption
+                          {camp.utm_source && <span className="text-emerald-500 ml-1">· source: {camp.utm_source}</span>}
+                          {camp.utm_campaign && <span className="text-emerald-500 ml-1">· campaign: {camp.utm_campaign}</span>}
+                        </p>
+                      </div>
+                    )
+                  })()}
 
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-medium text-slate-500">Background / Messaging</label>
@@ -851,6 +1546,45 @@ export default function SocialPage() {
                     <p className="text-xs text-slate-400">{form.caption.length} chars</p>
                   </div>
 
+                  {/* ── Add to Nurture Library ─────────────────────────── */}
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.add_to_library}
+                        onChange={e => setForm(f => ({ ...f, add_to_library: e.target.checked }))}
+                        className="h-4 w-4 rounded accent-emerald-500"
+                      />
+                      <span className="text-sm font-semibold text-emerald-800">📚 Add to Posts Library</span>
+                      <span className="text-xs text-emerald-600">— send this post to contacts in pipeline</span>
+                    </label>
+                    {form.add_to_library && (
+                      <div>
+                        <p className="text-xs font-medium text-emerald-700 mb-2">Tag for pipeline stage(s):</p>
+                        <div className="flex flex-wrap gap-2">
+                          {PIPELINE_STAGES.map(stage => (
+                            <label key={stage} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-medium transition-all ${
+                              form.library_stages.includes(stage)
+                                ? 'bg-emerald-500 text-white border-transparent'
+                                : 'bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                            }`}>
+                              <input type="checkbox" className="hidden"
+                                checked={form.library_stages.includes(stage)}
+                                onChange={e => setForm(f => ({
+                                  ...f,
+                                  library_stages: e.target.checked
+                                    ? [...f.library_stages, stage]
+                                    : f.library_stages.filter(s => s !== stage)
+                                }))}
+                              />
+                              {stage}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-2 pt-1">
                     <button type="button" onClick={() => { setForm(emptyForm); setSelectedTemplate(null); setEditingPost(null) }}
                       className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Clear</button>
@@ -870,7 +1604,232 @@ export default function SocialPage() {
           </div>
         )}
 
+        {/* ── POST TRACKER TAB ─────────────────────────────────────────────── */}
+        {activeTab === 'tracker' && (
+          <div className="py-2">
+            <PostTrackerTable showHeader={false} />
+          </div>
+        )}
+
       </div>
+
+      {/* ── Day Picker / Quick Schedule Modal ───────────────────────────────── */}
+      {dayPickerDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Schedule a post</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {new Date(dayPickerDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </p>
+              </div>
+              <button onClick={() => setDayPickerDate(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Template list */}
+            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto space-y-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Pick a template — saves instantly</p>
+              {activeTemplates.map(t => (
+                <button
+                  key={t.collateral}
+                  disabled={dayPickerSaving}
+                  onClick={() => quickSchedule(t, dayPickerDate)}
+                  className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-orange-400 hover:bg-orange-50/40 transition-all text-left disabled:opacity-50 group">
+                  <span className="text-xl mt-0.5">{postTypeIcon(t.media_type)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 group-hover:text-orange-700">{t.collateral}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{t.media_type} · {t.platforms}</p>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-1">{t.caption}</p>
+                  </div>
+                  <span className="text-xs text-orange-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1">Schedule →</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <button
+                disabled={dayPickerSaving}
+                onClick={() => { setDayPickerDate(null); openCreateWithDate(dayPickerDate) }}
+                className="text-xs text-slate-500 hover:text-orange-600 font-medium transition-colors">
+                ✏️ Write from scratch instead
+              </button>
+              {dayPickerSaving && (
+                <div className="flex items-center gap-1.5 text-xs text-orange-600">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Template Add/Edit Modal ─────────────────────────────────────────── */}
+      {showTemplateForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-slate-900">
+                {editingTemplate ? 'Edit Template' : 'New Template'}
+              </h3>
+              <button onClick={() => setShowTemplateForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
+            </div>
+            <form onSubmit={saveTemplate} className="p-6 space-y-3 overflow-y-auto flex-1">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Title <span className="text-red-500">*</span></label>
+                <input required value={templateForm.title}
+                  onChange={e => setTemplateForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="e.g. Teaser Post #1"
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Platforms</label>
+                  <input value={templateForm.platforms}
+                    onChange={e => setTemplateForm(f => ({ ...f, platforms: e.target.value }))}
+                    placeholder="LinkedIn, Facebook"
+                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-500">Media Type</label>
+                  <input value={templateForm.media_type}
+                    onChange={e => setTemplateForm(f => ({ ...f, media_type: e.target.value }))}
+                    placeholder="Short Video, Static Image…"
+                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Background / Messaging Brief</label>
+                <textarea rows={2} value={templateForm.background}
+                  onChange={e => setTemplateForm(f => ({ ...f, background: e.target.value }))}
+                  placeholder="The key message and context for this post…"
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">CTA</label>
+                <input value={templateForm.cta}
+                  onChange={e => setTemplateForm(f => ({ ...f, cta: e.target.value }))}
+                  placeholder="👉 Click here to…"
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Post Caption <span className="text-red-500">*</span></label>
+                <textarea required rows={4} value={templateForm.caption}
+                  onChange={e => setTemplateForm(f => ({ ...f, caption: e.target.value }))}
+                  placeholder="Write the full caption…"
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none font-mono text-xs" />
+                <p className="text-xs text-slate-400">{templateForm.caption.length} chars</p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-500">Sort Order</label>
+                <input type="number" value={templateForm.sort_order}
+                  onChange={e => setTemplateForm(f => ({ ...f, sort_order: Number(e.target.value) }))}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 w-24" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setShowTemplateForm(false)}
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-slate-600 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={templateSaving}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                  {templateSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {editingTemplate ? 'Save Changes' : 'Create Template'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── LinkedIn Manual Setup Modal ──────────────────────────────────────── */}
+      {showLinkedInManual && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded bg-blue-600 flex items-center justify-center text-white text-sm font-bold">in</div>
+                <h3 className="text-base font-semibold text-slate-900">LinkedIn Manual Setup</h3>
+              </div>
+              <button onClick={() => setShowLinkedInManual(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 mb-4 text-xs text-blue-700 space-y-1">
+              <p className="font-semibold">How to get your token:</p>
+              <ol className="list-decimal list-inside space-y-0.5">
+                <li>Go to <a href="https://www.linkedin.com/developers/tools/oauth/redirect" target="_blank" rel="noreferrer" className="underline font-medium">LinkedIn Token Generator ↗</a></li>
+                <li>Select scope: <span className="font-mono bg-blue-100 px-1 rounded">w_member_social</span></li>
+                <li>Click <strong>Request access token</strong></li>
+                <li>Copy the <strong>Access Token</strong> and your <strong>Member ID</strong></li>
+              </ol>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">Access Token <span className="text-red-500">*</span></label>
+                <textarea
+                  rows={3}
+                  value={liToken}
+                  onChange={e => setLiToken(e.target.value)}
+                  placeholder="Paste your LinkedIn access token here..."
+                  className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-600">Member ID</label>
+                  <button
+                    type="button"
+                    onClick={detectMemberId}
+                    disabled={liDetecting || !liToken.trim()}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-40">
+                    {liDetecting ? 'Detecting…' : 'Auto-detect from token →'}
+                  </button>
+                </div>
+                <input
+                  value={liMemberId}
+                  onChange={e => setLiMemberId(e.target.value)}
+                  placeholder="Paste token above then click Auto-detect"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {liDebug && (
+                  <div className="mt-1 rounded-lg bg-gray-50 border border-gray-200 p-2">
+                    <p className="text-xs font-medium text-slate-600 mb-1">LinkedIn token data (find your ID here):</p>
+                    <pre className="text-xs text-slate-700 overflow-auto max-h-40 whitespace-pre-wrap">{liDebug}</pre>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">Display name <span className="text-slate-400">(optional)</span></label>
+                <input
+                  value={liName}
+                  onChange={e => setLiName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setShowLinkedInManual(false)}
+                className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg text-slate-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                onClick={saveLinkedInManual}
+                disabled={liSaving || !liToken.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {liSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {liSaving ? 'Saving…' : 'Connect LinkedIn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -5,17 +5,25 @@ import { supabase } from '@/lib/supabase'
 import { Loader2, ChevronDown, BarChart2, Megaphone, TrendingUp, CheckSquare } from 'lucide-react'
 
 type Contact = {
-  id: string
-  full_name: string | null
+  contact_id: string
+  first_name: string
+  last_name: string | null
   email: string | null
   utm_source: string | null
   channel: string | null
-  campaign_name: string | null
-  status: string | null
-  funnel_level: string | null
-  lead_score: number | null
+  company: string | null
+  stage: string
+  state: string
   country: string | null
   created_at: string
+  // computed
+  id: string
+  full_name: string
+  status: string
+  campaign_name: string | null  // alias for company
+  // legacy compat (not in new schema — always 0/null)
+  lead_score?: number
+  funnel_level?: string | null
 }
 
 type Deal = {
@@ -38,7 +46,7 @@ type Campaign = {
 type Task = {
   id: string
   type: string
-  done: boolean
+  status: string
   due_date: string | null
 }
 
@@ -117,12 +125,24 @@ export default function ReportsPage() {
   useEffect(() => {
     async function load() {
       const [c, d, ca, t] = await Promise.all([
-        supabase.from('users').select('id,full_name,email,utm_source,channel,campaign_name,status,funnel_level,lead_score,country,created_at'),
+        supabase.from('contacts_current').select('contact_id,first_name,last_name,email,utm_source,channel,company,stage,state,country,created_at'),
         supabase.from('pipeline_deals').select('id,stage,value,channel,campaign_name'),
         supabase.from('campaigns').select('id,name,channel,status,budget,spent'),
-        supabase.from('tasks').select('id,type,done,due_date'),
+        supabase.from('tasks').select('id,type,status,due_date'),
       ])
-      setContacts(c.data ?? [])
+      const deriveStatus = (stage: string, state: string) => {
+        if (stage === 'lead') return 'lead'
+        if (stage === 'customer_trial') return state === 'active' ? 'trial_active' : state === 'inactive' ? 'trial_inactive' : 'trial_expired'
+        if (stage === 'customer_paid') return state === 'active' ? 'customer' : state === 'at_risk' ? 'at_risk' : 'churned'
+        return 'lead'
+      }
+      setContacts((c.data ?? []).map((r: Record<string, unknown>) => ({
+        ...r,
+        id:           r.contact_id,
+        full_name:    [r.first_name, r.last_name].filter(Boolean).join(' '),
+        status:       deriveStatus(r.stage as string, r.state as string),
+        campaign_name: r.company ?? null,
+      })) as Contact[])
       setDeals(d.data ?? [])
       setCampaigns(ca.data ?? [])
       setTasks(t.data ?? [])
@@ -131,26 +151,39 @@ export default function ReportsPage() {
     load()
   }, [])
 
-  // ── Summary KPIs ───────────────────────────────────────────────────────────
-  const totalLeads = contacts.length
-  const totalConverted = contacts.filter(c => c.status === 'converted').length
-  const totalWonValue = deals.filter(d => d.stage === 'Won').reduce((s, d) => s + d.value, 0)
-  const totalSpend = campaigns.reduce((s, c) => s + (c.spent ?? 0), 0)
-  const overallCR = pct(totalConverted, totalLeads)
-  const overallCPL = totalSpend > 0 && totalLeads > 0 ? Math.round(totalSpend / totalLeads) : 0
-  const avgLeadScore = contacts.length > 0
-    ? Math.round(contacts.reduce((s, c) => s + (c.lead_score ?? 0), 0) / contacts.length) : 0
-  const overallROI = totalSpend > 0 ? Math.round(((totalWonValue - totalSpend) / totalSpend) * 100) : null
+  // ── SaaS Lifecycle KPIs ────────────────────────────────────────────────────
+  const totalLeads      = contacts.length
+  const totalSpend      = campaigns.reduce((s, c) => s + (c.spent ?? 0), 0)
   const activeCampaigns = campaigns.filter(c => c.status === 'active').length
+  const overallCPL      = totalSpend > 0 && totalLeads > 0 ? Math.round(totalSpend / totalLeads) : 0
+
+  const leadsCount      = contacts.filter(c => c.status === 'lead').length
+  const trialsCount     = contacts.filter(c => c.status === 'trial_active' || c.status === 'trial_inactive').length
+  const paidCount       = contacts.filter(c => c.status === 'customer').length
+  const atRiskCount     = contacts.filter(c => c.status === 'at_risk').length
+  const churnedCount    = contacts.filter(c => c.status === 'churned').length
+
+  const leadToTrialRate  = pct(trialsCount + paidCount + atRiskCount + churnedCount, leadsCount + trialsCount + paidCount + atRiskCount + churnedCount)
+  const trialToPaidRate  = pct(paidCount + atRiskCount + churnedCount, trialsCount + paidCount + atRiskCount + churnedCount)
 
   const summaryKpis = [
-    { label: 'Total Leads', value: totalLeads, color: 'text-sky-600', sub: `${activeCampaigns} active campaigns` },
-    { label: 'Conversion Rate', value: `${overallCR}%`, color: 'text-violet-600', sub: `${totalConverted} converted` },
-    { label: 'Won Revenue', value: `$${totalWonValue.toLocaleString()}`, color: 'text-emerald-600', sub: `${deals.filter(d => d.stage === 'Won').length} deals won` },
-    { label: 'Total Spend', value: `$${totalSpend.toLocaleString()}`, color: 'text-amber-600', sub: `across ${campaigns.length} campaigns` },
-    { label: 'Avg CPL', value: overallCPL > 0 ? `$${overallCPL}` : '—', color: 'text-orange-500', sub: 'cost per lead' },
-    { label: 'Overall ROI', value: overallROI !== null ? `${overallROI >= 0 ? '+' : ''}${overallROI}%` : '—', color: overallROI !== null && overallROI >= 0 ? 'text-emerald-600' : 'text-red-500', sub: 'won vs spend' },
+    { label: 'Leads',          value: leadsCount,                  color: 'text-sky-600',    sub: `${activeCampaigns} active campaigns` },
+    { label: 'Active Trials',  value: trialsCount,                 color: 'text-blue-600',   sub: 'in trial right now'                  },
+    { label: 'Paid Customers', value: paidCount,                   color: 'text-emerald-600',sub: 'active subscriptions'                },
+    { label: 'At Risk',        value: atRiskCount,                 color: 'text-amber-600',  sub: 'need attention'                      },
+    { label: 'Lead → Trial',   value: `${leadToTrialRate}%`,       color: 'text-violet-600', sub: 'conversion rate'                     },
+    { label: 'Trial → Paid',   value: `${trialToPaidRate}%`,       color: 'text-orange-500', sub: 'conversion rate'                     },
   ]
+
+  // ── Lifecycle Funnel ────────────────────────────────────────────────────────
+  const funnelStages = [
+    { label: 'Lead',         count: leadsCount,   color: '#0ea5e9', bg: 'bg-sky-500'     },
+    { label: 'Trial',        count: trialsCount,  color: '#8b5cf6', bg: 'bg-violet-500'  },
+    { label: 'Paid',         count: paidCount,    color: '#10b981', bg: 'bg-emerald-500' },
+    { label: 'At Risk',      count: atRiskCount,  color: '#f59e0b', bg: 'bg-amber-500'   },
+    { label: 'Churned',      count: churnedCount, color: '#f87171', bg: 'bg-red-400'     },
+  ]
+  const maxFunnelCount = Math.max(...funnelStages.map(s => s.count), 1)
 
   // ── Leads over time ────────────────────────────────────────────────────────
   const now = new Date()
@@ -194,6 +227,35 @@ export default function ReportsPage() {
     count: deals.filter(d => d.stage === stage).length,
     value: deals.filter(d => d.stage === stage).reduce((s, d) => s + d.value, 0),
   }))
+
+  // ── Source attribution (Lead→Trial→Paid by channel/UTM) ───────────────────
+  const sourceAttrib: Record<string, { leads: number; trials: number; paid: number }> = {}
+  contacts.forEach(c => {
+    const src = c.channel ?? c.utm_source ?? 'Direct'
+    if (!sourceAttrib[src]) sourceAttrib[src] = { leads: 0, trials: 0, paid: 0 }
+    // A contact in trial or paid has already been a lead — count them in all prior stages
+    if (c.stage === 'lead') {
+      sourceAttrib[src].leads++
+    } else if (c.stage === 'customer_trial') {
+      sourceAttrib[src].leads++
+      sourceAttrib[src].trials++
+    } else if (c.stage === 'customer_paid') {
+      sourceAttrib[src].leads++
+      sourceAttrib[src].trials++
+      sourceAttrib[src].paid++
+    }
+  })
+  const sourceRows = Object.entries(sourceAttrib)
+    .map(([src, v]) => ({
+      src,
+      leads:       v.leads,
+      trials:      v.trials,
+      paid:        v.paid,
+      leadToTrial: pct(v.trials, v.leads),
+      trialToPaid: pct(v.paid, v.trials),
+      overallCR:   pct(v.paid, v.leads),
+    }))
+    .sort((a, b) => b.paid - a.paid || b.trials - a.trials || b.leads - a.leads)
 
   // ── Campaign rows ──────────────────────────────────────────────────────────
   const campRows = campaigns.map(c => {
@@ -243,10 +305,10 @@ export default function ReportsPage() {
   tasks.forEach(t => {
     if (!taskTypeMap[t.type]) taskTypeMap[t.type] = { done: 0, total: 0 }
     taskTypeMap[t.type].total++
-    if (t.done) taskTypeMap[t.type].done++
+    if ((t as unknown as { status: string }).status === 'done') taskTypeMap[t.type].done++
   })
   const taskRows = Object.entries(taskTypeMap).map(([type, v]) => ({ type, ...v, cr: pct(v.done, v.total) })).sort((a, b) => b.total - a.total)
-  const totalTasksDone = tasks.filter(t => t.done).length
+  const totalTasksDone = tasks.filter(t => (t as unknown as { status: string }).status === 'done').length
   const totalTaskCompletion = pct(totalTasksDone, tasks.length)
 
   return (
@@ -341,17 +403,31 @@ export default function ReportsPage() {
                 )}
               </Card>
 
-              {/* Pipeline Stages */}
+              {/* SaaS Lifecycle Funnel */}
               <Card>
-                <SectionTitle title="Pipeline Stages" sub="Deal count and value by stage" />
+                <SectionTitle title="Lifecycle Funnel" sub="Contacts at each stage of the SaaS journey" />
                 {loading ? <LoadingRow /> : (
-                  <div className="grid grid-cols-3 gap-3">
-                    {stageRows.map(r => (
-                      <div key={r.stage} className="rounded-lg border border-gray-100 bg-gray-50 p-3 text-center">
-                        <div className="h-2 w-2 rounded-full mx-auto mb-1.5" style={{ backgroundColor: stageColor[r.stage] }} />
-                        <p className="text-xs text-slate-500 mb-1 leading-tight">{r.stage}</p>
-                        <p className="text-xl font-bold" style={{ color: stageColor[r.stage] }}>{r.count}</p>
-                        {r.value > 0 && <p className="text-xs text-slate-400 mt-0.5">${r.value.toLocaleString()}</p>}
+                  <div className="space-y-3">
+                    {funnelStages.map(s => (
+                      <div key={s.label} className="flex items-center gap-3">
+                        <div className="w-20 shrink-0 flex items-center gap-2">
+                          <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          <span className="text-xs text-slate-700 font-medium">{s.label}</span>
+                        </div>
+                        <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width:           `${Math.max((s.count / maxFunnelCount) * 100, s.count > 0 ? 6 : 0)}%`,
+                              backgroundColor: s.color,
+                              opacity:         0.8,
+                            }}
+                          />
+                        </div>
+                        <span className="w-8 text-sm font-bold text-slate-700 text-right">{s.count}</span>
+                        <span className="w-12 text-xs text-slate-400 text-right">
+                          {pct(s.count, totalLeads)}%
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -364,6 +440,80 @@ export default function ReportsPage() {
         {/* ── CAMPAIGNS TAB ────────────────────────────────────────────────── */}
         {activeTab === 'campaigns' && (
           <>
+            {/* Source Attribution */}
+            <Card>
+              <SectionTitle title="Source Attribution" sub="Lead → Trial → Paid conversion funnel by acquisition channel" />
+              {loading ? <LoadingRow /> : sourceRows.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-10">No contacts with channel data yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        {['Source', 'Leads', 'Trials', 'Paid', 'Lead → Trial', 'Trial → Paid', 'Overall CR'].map(h => (
+                          <th key={h} className="pb-2 text-left text-xs font-medium text-slate-500 pr-4 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {sourceRows.map(r => (
+                        <tr key={r.src} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-3 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: channelColor[r.src] ?? '#94a3b8' }} />
+                              <span className="text-xs font-medium text-slate-900">{r.src}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4 text-xs text-slate-700 font-semibold">{r.leads}</td>
+                          <td className="py-3 pr-4 text-xs text-violet-600 font-semibold">{r.trials}</td>
+                          <td className="py-3 pr-4 text-xs text-emerald-600 font-bold">{r.paid}</td>
+                          <td className="py-3 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-violet-400 rounded-full" style={{ width: `${r.leadToTrial}%` }} />
+                              </div>
+                              <span className="text-xs font-semibold text-violet-600">{r.leadToTrial}%</span>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-orange-400 rounded-full" style={{ width: `${r.trialToPaid}%` }} />
+                              </div>
+                              <span className="text-xs font-semibold text-orange-500">{r.trialToPaid}%</span>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                              r.overallCR >= 50 ? 'bg-emerald-50 text-emerald-600' :
+                              r.overallCR >= 20 ? 'bg-amber-50 text-amber-600' :
+                              r.overallCR > 0  ? 'bg-orange-50 text-orange-500' :
+                              'text-slate-400'
+                            }`}>
+                              {r.overallCR > 0 ? `${r.overallCR}%` : '—'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {sourceRows.length > 0 && (
+                      <tfoot>
+                        <tr className="border-t border-gray-200 bg-gray-50">
+                          <td className="py-2.5 text-xs font-semibold text-slate-500">Total</td>
+                          <td className="py-2.5 text-xs font-bold text-slate-900">{sourceRows.reduce((s, r) => s + r.leads, 0)}</td>
+                          <td className="py-2.5 text-xs font-bold text-violet-600">{sourceRows.reduce((s, r) => s + r.trials, 0)}</td>
+                          <td className="py-2.5 text-xs font-bold text-emerald-600">{sourceRows.reduce((s, r) => s + r.paid, 0)}</td>
+                          <td className="py-2.5 text-xs font-semibold text-violet-600">{leadToTrialRate}%</td>
+                          <td className="py-2.5 text-xs font-semibold text-orange-500">{trialToPaidRate}%</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              )}
+            </Card>
+
             {/* ROI Ranking */}
             <Card>
               <SectionTitle title="Campaign ROI Ranking" sub="Return on investment — Won Revenue vs Spend" />
@@ -463,9 +613,9 @@ export default function ReportsPage() {
                       <tr className="border-t border-gray-200 bg-gray-50">
                         <td colSpan={3} className="py-2.5 text-xs font-semibold text-slate-500">Totals</td>
                         <td className="py-2.5 text-xs font-bold text-slate-900">{totalLeads}</td>
-                        <td className="py-2.5 text-xs font-bold text-violet-600">{overallCR}%</td>
+                        <td className="py-2.5 text-xs font-bold text-violet-600">{leadToTrialRate}%</td>
                         <td className="py-2.5 text-xs font-bold text-slate-900">{overallCPL > 0 ? `$${overallCPL}` : '—'}</td>
-                        <td className="py-2.5 text-xs font-bold text-emerald-600">${totalWonValue.toLocaleString()}</td>
+                        <td className="py-2.5 text-xs font-bold text-emerald-600">—</td>
                         <td className="py-2.5 text-xs font-bold text-slate-900">${totalSpend.toLocaleString()}</td>
                         <td />
                       </tr>
@@ -609,7 +759,7 @@ export default function ReportsPage() {
 
               {/* Lead Score Distribution */}
               <Card>
-                <SectionTitle title="Lead Score Distribution" sub={`Contacts by score bucket — avg ${avgLeadScore}`} />
+                <SectionTitle title="Lead Score Distribution" sub={`Contacts by score bucket — avg ${0}`} />
                 {loading ? <LoadingRow /> : (
                   <div className="space-y-3">
                     {scoreBuckets.map(b => (
@@ -625,7 +775,7 @@ export default function ReportsPage() {
                     ))}
                     <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                       <span className="text-xs text-slate-400">Overall avg score</span>
-                      <span className="text-sm font-bold text-orange-500">{avgLeadScore}</span>
+                      <span className="text-sm font-bold text-orange-500">{0}</span>
                     </div>
                   </div>
                 )}
@@ -691,7 +841,7 @@ export default function ReportsPage() {
               {[
                 { label: 'Total Tasks', value: tasks.length, color: 'text-slate-700' },
                 { label: 'Completed', value: totalTasksDone, color: 'text-emerald-600' },
-                { label: 'Pending', value: tasks.filter(t => !t.done).length, color: 'text-amber-600' },
+                { label: 'Pending', value: tasks.filter(t => t.status !== 'done').length, color: 'text-amber-600' },
                 { label: 'Completion Rate', value: `${totalTaskCompletion}%`, color: totalTaskCompletion >= 70 ? 'text-emerald-600' : 'text-amber-600' },
               ].map(k => (
                 <div key={k.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -734,10 +884,10 @@ export default function ReportsPage() {
                 {loading ? <LoadingRow /> : (
                   <div className="space-y-3">
                     {[
-                      { label: 'Completed', count: tasks.filter(t => t.done).length, color: 'bg-emerald-400', text: 'text-emerald-600' },
-                      { label: 'Due Today', count: tasks.filter(t => !t.done && t.due_date === new Date().toISOString().split('T')[0]).length, color: 'bg-amber-400', text: 'text-amber-600' },
-                      { label: 'Overdue', count: tasks.filter(t => !t.done && t.due_date !== null && t.due_date < new Date().toISOString().split('T')[0]).length, color: 'bg-red-400', text: 'text-red-600' },
-                      { label: 'Upcoming', count: tasks.filter(t => !t.done && (t.due_date === null || t.due_date > new Date().toISOString().split('T')[0])).length, color: 'bg-sky-400', text: 'text-sky-600' },
+                      { label: 'Completed', count: tasks.filter(t => t.status === 'done').length, color: 'bg-emerald-400', text: 'text-emerald-600' },
+                      { label: 'Due Today', count: tasks.filter(t => t.status !== 'done' && t.due_date === new Date().toISOString().split('T')[0]).length, color: 'bg-amber-400', text: 'text-amber-600' },
+                      { label: 'Overdue', count: tasks.filter(t => t.status !== 'done' && t.due_date !== null && t.due_date < new Date().toISOString().split('T')[0]).length, color: 'bg-red-400', text: 'text-red-600' },
+                      { label: 'Upcoming', count: tasks.filter(t => t.status !== 'done' && (t.due_date === null || t.due_date > new Date().toISOString().split('T')[0])).length, color: 'bg-sky-400', text: 'text-sky-600' },
                     ].map(s => (
                       <div key={s.label} className="flex items-center gap-3">
                         <div className="w-20 text-xs text-slate-600 shrink-0">{s.label}</div>

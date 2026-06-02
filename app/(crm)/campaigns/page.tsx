@@ -1,9 +1,18 @@
 ﻿'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Megaphone, TrendingUp, DollarSign, Users, Pencil, Eye, Copy, Check } from 'lucide-react'
+import { Plus, X, Loader2, Megaphone, TrendingUp, DollarSign, Users, Pencil, Eye, Copy, Check, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+
+type SocialPost = {
+  id: string
+  collateral: string
+  platforms: string
+  status: 'draft' | 'scheduled' | 'published'
+  scheduled_date: string | null
+  campaign_id: string | null
+}
 
 type Campaign = {
   id: string
@@ -24,7 +33,7 @@ type Campaign = {
   created_at: string
 }
 
-type CampaignWithLeads = Campaign & { leads: number; cr: number; cpl: number; ctr: number; landingCr: number }
+type CampaignWithLeads = Campaign & { leads: number; cr: number; cpl: number; ctr: number; landingCr: number; postsCount: number }
 
 const statusVariant = { active: 'success', paused: 'warning', draft: 'neutral', ended: 'danger' } as const
 const channelVariant: Record<string, 'indigo' | 'info' | 'danger' | 'success' | 'neutral'> = {
@@ -68,7 +77,9 @@ export default function CampaignsPage() {
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedId, setCopiedId]         = useState<string | null>(null)
+  const [expandedPosts, setExpandedPosts] = useState<string | null>(null)
+  const [campaignPosts, setCampaignPosts] = useState<Record<string, SocialPost[]>>({})
 
   const BASE_URL = typeof window !== 'undefined'
     ? `${window.location.origin}/landing`
@@ -90,26 +101,44 @@ export default function CampaignsPage() {
 
   async function fetchCampaigns() {
     setLoading(true)
-    const [{ data: camps, error: campErr }, { data: contacts }] = await Promise.all([
+    const [{ data: camps, error: campErr }, { data: contacts }, { data: socialPosts }] = await Promise.all([
       supabase.from('campaigns').select('*').order('created_at', { ascending: false }),
-      supabase.from('users').select('campaign_name, status'),
+      supabase.from('contacts_current').select('company,stage,state'),
+      supabase.from('social_posts').select('id, campaign_id, collateral, platforms, status, scheduled_date'),
     ])
     if (campErr) { setLoading(false); return }
     const enriched = (camps ?? []).map(c => {
-      const campLeads = (contacts ?? []).filter(u => u.campaign_name === c.name)
-      const leads = campLeads.length
-      const converted = campLeads.filter(u => u.status === 'converted').length
-      const cr = leads > 0 ? Math.round((converted / leads) * 100 * 10) / 10 : 0
-      const cpl = leads > 0 && c.spent > 0 ? Math.round((c.spent / leads) * 10) / 10 : 0
-      const ctr = c.impressions > 0 ? Math.round((c.clicks / c.impressions) * 100 * 10) / 10 : 0
-      const landingCr = c.clicks > 0 ? Math.round((leads / c.clicks) * 100 * 10) / 10 : 0
-      return { ...c, leads, cr, cpl, ctr, landingCr }
+      const campLeads = (contacts ?? []).filter((u: { company: string | null; stage: string }) => u.company === c.name)
+      const leads     = campLeads.length
+      const converted = campLeads.filter((u: { stage: string }) => u.stage === 'customer_paid').length
+      const cr          = leads > 0 ? Math.round((converted / leads) * 100 * 10) / 10 : 0
+      const cpl         = leads > 0 && c.spent > 0 ? Math.round((c.spent / leads) * 10) / 10 : 0
+      const ctr         = c.impressions > 0 ? Math.round((c.clicks / c.impressions) * 100 * 10) / 10 : 0
+      const landingCr   = c.clicks > 0 ? Math.round((leads / c.clicks) * 100 * 10) / 10 : 0
+      const postsCount  = (socialPosts ?? []).filter(p => p.campaign_id === c.id).length
+      return { ...c, leads, cr, cpl, ctr, landingCr, postsCount }
     })
     setCampaigns(enriched)
     setLoading(false)
   }
 
   useEffect(() => { fetchCampaigns() }, [])
+
+  async function togglePosts(campaignId: string) {
+    if (expandedPosts === campaignId) {
+      setExpandedPosts(null)
+      return
+    }
+    if (!campaignPosts[campaignId]) {
+      const { data } = await supabase
+        .from('social_posts')
+        .select('id, collateral, platforms, status, scheduled_date, campaign_id')
+        .eq('campaign_id', campaignId)
+        .order('scheduled_date', { ascending: true, nullsFirst: false })
+      setCampaignPosts(prev => ({ ...prev, [campaignId]: data ?? [] }))
+    }
+    setExpandedPosts(campaignId)
+  }
 
   function validate(f: typeof emptyForm) {
     const errors: Record<string, string> = {}
@@ -447,14 +476,15 @@ export default function CampaignsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Campaign', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR%', 'Leads', 'Landing CR%', 'CPL', 'Start Date', 'Actions'].map(h => (
+                    {['Campaign', 'Channel', 'Status', 'Impressions', 'Clicks', 'CTR%', 'Leads', 'Landing CR%', 'CPL', 'Start Date', 'Posts', 'Actions'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filtered.map(c => (
-                    <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                    <React.Fragment key={c.id}>
+                    <tr className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <p className="font-medium text-slate-900">{c.name}</p>
                         {c.goal && <p className="text-xs text-slate-400 mt-0.5 max-w-48 truncate">{c.goal}</p>}
@@ -488,6 +518,16 @@ export default function CampaignsPage() {
                       <td className="px-4 py-3 text-slate-500">{c.cpl > 0 ? `$${c.cpl}` : '—'}</td>
                       <td className="px-4 py-3 text-xs text-slate-400">{c.start_date ?? '—'}</td>
                       <td className="px-4 py-3">
+                        <button onClick={() => togglePosts(c.id)}
+                          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                          <FileText className="h-3.5 w-3.5" />
+                          {c.postsCount}
+                          {expandedPosts === c.id
+                            ? <ChevronUp className="h-3 w-3" />
+                            : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button onClick={() => setViewCampaign(c)} className="text-slate-400 hover:text-sky-600 transition-colors" title="View">
                             <Eye className="h-4 w-4" />
@@ -504,6 +544,33 @@ export default function CampaignsPage() {
                         </div>
                       </td>
                     </tr>
+                    {/* Posts drill-down row */}
+                    {expandedPosts === c.id && (
+                      <tr>
+                        <td colSpan={12} className="px-6 py-3 bg-blue-50 border-b border-blue-100">
+                          <p className="text-xs font-semibold text-blue-700 mb-2">Posts in this campaign</p>
+                          {(campaignPosts[c.id] ?? []).length === 0 ? (
+                            <p className="text-xs text-slate-400">No posts linked yet — go to Social Manager → Create Post → select this campaign</p>
+                          ) : (
+                            <div className="space-y-1">
+                              {(campaignPosts[c.id] ?? []).map(p => (
+                                <div key={p.id} className="flex items-center gap-3 text-xs bg-white rounded-lg px-3 py-2 border border-blue-100">
+                                  <span className="font-medium text-slate-700 flex-1">{p.collateral}</span>
+                                  <span className="text-slate-400">{p.platforms}</span>
+                                  <span className={`px-2 py-0.5 rounded-full font-medium ${
+                                    p.status === 'published' ? 'bg-emerald-100 text-emerald-700' :
+                                    p.status === 'scheduled' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-gray-100 text-gray-500'
+                                  }`}>{p.status}</span>
+                                  <span className="text-slate-400">{p.scheduled_date ?? 'No date'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50 border-t border-gray-100">

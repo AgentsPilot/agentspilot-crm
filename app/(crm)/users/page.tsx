@@ -21,12 +21,12 @@ type User = {
   utm_content: string | null
   utm_term: string | null
   ad_id: string | null
-  status: 'lead' | 'active' | 'converted' | 'inactive'
-  funnel_level: 'Awareness' | 'Interest' | 'Consideration' | 'Intent' | 'Converted'
+  status: 'lead' | 'active' | 'converted' | 'inactive' | 'trial_active' | 'trial_inactive' | 'trial_expired' | 'customer' | 'at_risk' | 'churned'
+  funnel_level: 'Awareness' | 'Interest' | 'Consideration' | 'Intent' | 'Converted' | null
   lead_score: number
   created_at: string
   converted_at: string | null
-  last_active_at: string
+  last_active_at: string | null
   notes: string | null
   tags: string[]
 }
@@ -73,11 +73,35 @@ export default function UsersPage() {
   async function fetchUsers() {
     setLoading(true)
     const { data, error } = await supabase
-      .from('users')
-      .select('*')
+      .from('contacts_current')
+      .select('contact_id,first_name,last_name,email,phone,country,channel,company,utm_source,utm_medium,utm_campaign,stage,state,plan,mrr,trial_started_at,trial_expires_at,created_at')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
-    else setUsers(data ?? [])
+    else setUsers((data ?? []).map((r: Record<string, unknown>) => ({
+      ...r,
+      id:           r.contact_id as string,
+      full_name:    [r.first_name, r.last_name].filter(Boolean).join(' '),
+      email:        (r.email ?? '') as string,
+      phone:        (r.phone ?? null) as string | null,
+      country:      (r.country ?? null) as string | null,
+      channel:      (r.channel ?? null) as string | null,
+      utm_source:   (r.utm_source ?? null) as string | null,
+      utm_medium:   (r.utm_medium ?? null) as string | null,
+      utm_campaign: (r.utm_campaign ?? null) as string | null,
+      created_at:   r.created_at as string,
+      last_active_at: null,
+      tags:         [] as string[],
+      status:       (() => {
+        const s = r.stage as string; const st = r.state as string
+        if (s === 'lead') return 'lead'
+        if (s === 'customer_trial') return st === 'active' ? 'trial_active' : st === 'inactive' ? 'trial_inactive' : 'trial_expired'
+        if (s === 'customer_paid') return st === 'active' ? 'customer' : st === 'at_risk' ? 'at_risk' : 'churned'
+        return 'lead'
+      })(),
+      campaign_name: (r.company ?? null) as string | null,
+      city: null, language: null, utm_content: null, utm_term: null, ad_id: null,
+      lead_score: 0, funnel_level: null, notes: null, converted_at: null,
+    } as User)))
     setLoading(false)
   }
 
@@ -86,23 +110,27 @@ export default function UsersPage() {
   async function addUser(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    const { error } = await supabase.from('users').insert([{
-      ...form,
-      lead_score: Number(form.lead_score),
-      phone: form.phone || null,
-      country: form.country || null,
-      city: form.city || null,
-      campaign_name: form.campaign_name || null,
-      utm_source: form.utm_source || null,
-      utm_medium: form.utm_medium || null,
-      utm_campaign: form.utm_campaign || null,
-      utm_content: form.utm_content || null,
-      utm_term: form.utm_term || null,
-      ad_id: form.ad_id || null,
-      notes: form.notes || null,
-    }])
+    // Use the unified /api/leads endpoint which writes contacts + contact_stages
+    const nameParts = form.full_name.trim().split(' ')
+    const res = await fetch('/api/leads', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        first_name:   nameParts[0],
+        last_name:    nameParts.slice(1).join(' ') || undefined,
+        email:        form.email,
+        phone:        form.phone || undefined,
+        company:      form.campaign_name || undefined,
+        country:      form.country || undefined,
+        channel:      form.channel || undefined,
+        utm_source:   form.utm_source || undefined,
+        utm_medium:   form.utm_medium || undefined,
+        utm_campaign: form.utm_campaign || undefined,
+        source:       'manual',
+      }),
+    })
     setSaving(false)
-    if (error) { setError(error.message); return }
+    if (!res.ok) { const b = await res.json(); setError(b.error ?? 'Save failed'); return }
     setShowForm(false)
     setForm(emptyForm)
     setUtmUrl('')
@@ -316,8 +344,8 @@ export default function UsersPage() {
                           <p className="font-medium text-slate-900">{user.full_name}</p>
                           <p className="text-xs text-slate-400">{user.email}</p>
                         </td>
-                        <td className="px-4 py-3"><Badge label={user.status} variant={statusVariant[user.status]} /></td>
-                        <td className="px-4 py-3"><Badge label={user.funnel_level} variant={levelVariant[user.funnel_level]} /></td>
+                        <td className="px-4 py-3"><Badge label={user.status} variant={statusVariant[user.status as keyof typeof statusVariant] ?? 'neutral'} /></td>
+                        <td className="px-4 py-3"><Badge label={user.funnel_level ?? '—'} variant={user.funnel_level ? (levelVariant[user.funnel_level as keyof typeof levelVariant] ?? 'neutral') : 'neutral'} /></td>
                         <td className="px-4 py-3 text-slate-700">{user.channel ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-500 text-xs max-w-32 truncate">{user.campaign_name ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-500 text-xs">{user.utm_source ?? '—'}</td>
@@ -348,7 +376,7 @@ export default function UsersPage() {
                                 { label: 'utm_content', value: user.utm_content },
                                 { label: 'utm_term', value: user.utm_term },
                                 { label: 'Converted At', value: user.converted_at ? new Date(user.converted_at).toLocaleDateString() : null },
-                                { label: 'Last Active', value: new Date(user.last_active_at).toLocaleDateString() },
+                                { label: 'Last Active', value: user.last_active_at ? new Date(user.last_active_at).toLocaleDateString() : null },
                               ].map(f => (
                                 <div key={f.label}>
                                   <p className="text-slate-400 font-medium">{f.label}</p>

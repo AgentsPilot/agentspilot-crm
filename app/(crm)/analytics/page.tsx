@@ -1,148 +1,242 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
-import { PerformanceLineChart, ChannelBarChart, BudgetRevenueChart, CohortCrChart, type WeeklyRow, type ChannelRow, type BudgetRow } from '@/components/charts/Charts'
 import { supabase } from '@/lib/supabase'
+import { TrendingUp, Users, Zap, DollarSign, Snowflake, ArrowRight, Loader2, BarChart2 } from 'lucide-react'
+
+type Contact = {
+  contact_id:       string
+  stage:            string
+  state:            string
+  acquisition_type: string | null
+  channel:          string | null
+  utm_source:       string | null
+  created_at:       string
+}
+
+type StageRow = {
+  contact_id: string
+  stage:      string
+  state:      string
+  changed_at: string
+}
+
+function pct(num: number, den: number) {
+  if (!den) return '—'
+  return Math.round((num / den) * 100) + '%'
+}
+
+function StatCard({ label, value, sub, icon: Icon, color, bg }: {
+  label: string; value: string | number; sub?: string
+  icon: React.ElementType; color: string; bg: string
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 flex items-start gap-4">
+      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${bg}`}>
+        <Icon className={`h-5 w-5 ${color}`} />
+      </div>
+      <div>
+        <p className="text-xs text-slate-400 font-medium">{label}</p>
+        <p className="text-2xl font-bold text-slate-900 mt-0.5">{value}</p>
+        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  )
+}
+
+function Bar({ label, value, max, color, sub }: {
+  label: string; value: number; max: number; color: string; sub?: string
+}) {
+  const w = max ? Math.round((value / max) * 100) : 0
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-1 text-xs">
+        <span className="text-slate-600 font-medium">{label}</span>
+        <span className="text-slate-400">{value}{sub ? ` · ${sub}` : ''}</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${w}%` }} />
+      </div>
+    </div>
+  )
+}
 
 export default function AnalyticsPage() {
-  const [weekly, setWeekly]   = useState<WeeklyRow[]>([])
-  const [channels, setChannels] = useState<ChannelRow[]>([])
-  const [budget, setBudget]   = useState<BudgetRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [history,  setHistory]  = useState<StageRow[]>([])
+  const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('weekly_performance').select('*').order('sort_order', { ascending: true }),
-      supabase.from('channel_performance').select('*').order('leads', { ascending: false }),
-      supabase.from('budget_months').select('*').order('sort_order', { ascending: true }),
-    ]).then(([{ data: w }, { data: c }, { data: b }]) => {
-      setWeekly(w ?? [])
-      setChannels(c ?? [])
-      setBudget(b ?? [])
+    async function load() {
+      const [{ data: c }, { data: h }] = await Promise.all([
+        supabase.from('contacts_current').select('contact_id,stage,state,acquisition_type,channel,utm_source,created_at'),
+        supabase.from('contact_stages').select('contact_id,stage,state,changed_at'),
+      ])
+      setContacts((c ?? []) as Contact[])
+      setHistory((h ?? []) as StageRow[])
       setLoading(false)
-    })
+    }
+    load()
   }, [])
 
-  const bestChannel = channels.length > 0 ? channels.reduce((a, b) => Number(a.cr) > Number(b.cr) ? a : b) : null
-  const bestWeek    = weekly.length > 0   ? weekly.reduce((a, b) => Number(a.leads) > Number(b.leads) ? a : b) : null
-  const totalSpend  = channels.reduce((s, c) => s + Number(c.spend), 0)
-  const totalRev    = channels.reduce((s, c) => s + Number(c.revenue), 0)
-  const roas        = totalSpend > 0 ? ((totalRev / totalSpend) * 100).toFixed(0) : '∞'
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 gap-2 text-slate-400">
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading analytics…
+      </div>
+    )
+  }
+
+  // Funnel — unique contacts that ever reached each stage
+  const everLead  = new Set(history.filter(h => h.stage === 'lead').map(h => h.contact_id)).size
+  const everTrial = new Set(history.filter(h => h.stage === 'customer_trial').map(h => h.contact_id)).size
+  const everPaid  = new Set(history.filter(h => h.stage === 'customer_paid').map(h => h.contact_id)).size
+
+  // Current counts
+  const leadContacts = contacts.filter(c => c.stage === 'lead')
+  const totalTrial   = contacts.filter(c => c.stage === 'customer_trial').length
+  const totalPaid    = contacts.filter(c => c.stage === 'customer_paid').length
+  const totalAll     = contacts.length
+  const coldLeads    = leadContacts.filter(c => c.state === 'cold').length
+  const activeLeads  = leadContacts.filter(c => c.state !== 'cold').length
+
+  const LEAD_STATES = [
+    { state: 'new',          label: 'New',             color: 'bg-amber-400'  },
+    { state: 'contacted',    label: 'Follow up · 1d',  color: 'bg-sky-400'    },
+    { state: 'reminded_7d',  label: 'Follow up · 7d',  color: 'bg-amber-500'  },
+    { state: 'reminded_21d', label: 'Follow up · 21d', color: 'bg-orange-500' },
+    { state: 'cold',         label: '❄️ Cold',          color: 'bg-slate-400'  },
+  ]
+
+  const stateCount = (s: string) => leadContacts.filter(c => c.state === s).length
+
+  // Acquisition type
+  const nurtured    = contacts.filter(c => c.acquisition_type === 'lead_nurtured').length
+  const directTrial = contacts.filter(c => c.acquisition_type === 'direct_trial').length
+  const directPaid  = contacts.filter(c => c.acquisition_type === 'direct_paid').length
+
+  // Channel breakdown
+  const channelMap: Record<string, number> = {}
+  contacts.forEach(c => {
+    const ch = c.channel || c.utm_source || 'Direct'
+    channelMap[ch] = (channelMap[ch] ?? 0) + 1
+  })
+  const channels = Object.entries(channelMap).sort((a, b) => b[1] - a[1]).slice(0, 6)
+
+  const FUNNEL = [
+    { label: 'Leads',    count: everLead,  color: 'bg-amber-400',   badge: 'bg-amber-100 text-amber-700'     },
+    { label: 'Trial',    count: everTrial, color: 'bg-blue-500',    badge: 'bg-blue-100 text-blue-700'       },
+    { label: 'Paid',     count: everPaid,  color: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
+  ]
 
   return (
     <div>
-      <Header title="Analytics" subtitle="Deep-dive performance analysis" />
+      <Header title="Analytics" subtitle="Lead acquisition & conversion funnel" />
       <div className="p-6 space-y-6">
 
-        {/* Insights bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            {
-              title: 'Best Performing Channel',
-              value: bestChannel ? bestChannel.channel : '—',
-              sub: bestChannel ? `${bestChannel.cr}% CR · ${Number(bestChannel.leads).toLocaleString()} leads` : '',
-              color: 'border-l-indigo-500',
-            },
-            {
-              title: 'Best Week',
-              value: bestWeek ? bestWeek.week : '—',
-              sub: bestWeek ? `${bestWeek.leads} leads · ${bestWeek.conversions} conversions` : '',
-              color: 'border-l-emerald-500',
-            },
-            {
-              title: 'Overall ROAS',
-              value: `${roas}%`,
-              sub: totalSpend > 0 ? `$${(totalRev / 1000).toFixed(0)}K revenue on $${(totalSpend / 1000).toFixed(0)}K spend` : 'No spend data',
-              color: 'border-l-amber-500',
-            },
-          ].map(insight => (
-            <div key={insight.title} className={`rounded-xl border border-gray-200 bg-white p-5 shadow-sm border-l-4 ${insight.color}`}>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{insight.title}</p>
-              <p className="text-xl font-bold text-slate-900 mt-1">
-                {loading ? <span className="animate-pulse bg-gray-100 rounded h-6 w-20 inline-block" /> : insight.value}
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Total Contacts"   value={totalAll}    icon={Users}       color="text-slate-600"    bg="bg-slate-100"   />
+          <StatCard label="Active Leads"     value={activeLeads} sub={`${coldLeads} cold`}
+                    icon={TrendingUp} color="text-amber-600" bg="bg-amber-50" />
+          <StatCard label="In Trial"         value={totalTrial}  sub={`${pct(everTrial, everLead)} of leads`}
+                    icon={Zap}        color="text-blue-600"  bg="bg-blue-50"  />
+          <StatCard label="Paying Customers" value={totalPaid}   sub={`${pct(everPaid, everTrial)} of trials`}
+                    icon={DollarSign} color="text-emerald-600" bg="bg-emerald-50" />
+        </div>
+
+        {/* Conversion Funnel */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-700 mb-5 flex items-center gap-2">
+            <BarChart2 className="h-4 w-4 text-slate-400" /> Conversion Funnel
+          </h2>
+          <div className="flex items-end gap-3">
+            {FUNNEL.map((s, i) => (
+              <div key={s.label} className="flex items-center gap-3 flex-1">
+                <div className="flex-1">
+                  <div className={`rounded-xl ${s.color} flex items-center justify-center`}
+                    style={{ height: `${Math.max(40, 80 * (s.count / (FUNNEL[0].count || 1)))}px`, opacity: 0.85 + 0.15 * (i / FUNNEL.length) }}>
+                    <span className="text-white text-lg font-bold">{s.count}</span>
+                  </div>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-xs text-slate-500 font-medium">{s.label}</span>
+                    {i > 0 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${s.badge}`}>
+                        {pct(s.count, FUNNEL[i - 1].count)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {i < FUNNEL.length - 1 && (
+                  <ArrowRight className="h-4 w-4 text-gray-300 shrink-0 mb-5" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Rate summary */}
+          <div className="mt-5 pt-4 border-t border-gray-100 grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-xl font-bold text-blue-600">{pct(everTrial, everLead)}</p>
+              <p className="text-xs text-slate-400 mt-0.5">Lead → Trial rate</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-emerald-600">{pct(everPaid, everTrial)}</p>
+              <p className="text-xs text-slate-400 mt-0.5">Trial → Paid rate</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-slate-500">{pct(coldLeads, everLead)}</p>
+              <p className="text-xs text-slate-400 mt-0.5 flex items-center justify-center gap-1">
+                <Snowflake className="h-3 w-3" /> Cold rate
               </p>
-              <p className="text-xs text-slate-500 mt-0.5">{insight.sub}</p>
             </div>
-          ))}
+          </div>
         </div>
 
-        {!loading && weekly.length > 0 && (
-          <>
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-1">CR Rate & Leads — {weekly.length} Weeks</h2>
-              <p className="text-xs text-slate-500 mb-4">Overall funnel performance trend</p>
-              <PerformanceLineChart data={weekly} />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900 mb-1">Channel Comparison</h2>
-                <p className="text-xs text-slate-500 mb-4">Leads vs Conversions by channel</p>
-                <ChannelBarChart data={channels} />
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900 mb-1">CR Rate Trend</h2>
-                <p className="text-xs text-slate-500 mb-4">Cohort conversion rate over time</p>
-                <CohortCrChart data={weekly} />
-              </div>
-            </div>
-
-            {budget.length > 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900 mb-1">Revenue vs Spend</h2>
-                <p className="text-xs text-slate-500 mb-4">6-month financial performance</p>
-                <BudgetRevenueChart data={budget} />
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Channel deep-dive table */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-slate-900">Channel Performance Deep Dive</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['Channel', 'Leads', 'Conv.', 'CR %', 'CPL', 'Spend', 'Revenue', 'ROAS'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">{h}</th>
+          {/* Lead Pipeline Breakdown */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5 lg:col-span-2">
+            <h2 className="text-sm font-semibold text-slate-700 mb-4">Lead Pipeline Breakdown</h2>
+            {leadContacts.length === 0
+              ? <p className="text-sm text-slate-300 text-center py-6">No leads yet</p>
+              : <div className="space-y-3">
+                  {LEAD_STATES.map(s => (
+                    <Bar key={s.state} label={s.label} value={stateCount(s.state)}
+                      max={leadContacts.length} color={s.color} sub={pct(stateCount(s.state), leadContacts.length)} />
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {channels.map(ch => {
-                  const chRoas = Number(ch.spend) > 0 ? ((Number(ch.revenue) / Number(ch.spend)) * 100).toFixed(0) : '∞'
-                  return (
-                    <tr key={ch.channel} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: ch.color }} />
-                          <span className="font-medium text-slate-900">{ch.channel}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{Number(ch.leads).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-slate-700">{ch.conversions}</td>
-                      <td className="px-4 py-3">
-                        <span className={`font-bold ${Number(ch.cr) >= 10 ? 'text-emerald-600' : Number(ch.cr) >= 7 ? 'text-indigo-600' : 'text-amber-600'}`}>
-                          {ch.cr}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{Number(ch.cpl) === 0 ? '—' : `$${ch.cpl}`}</td>
-                      <td className="px-4 py-3 text-slate-700">{Number(ch.spend) === 0 ? '—' : `$${Number(ch.spend).toLocaleString()}`}</td>
-                      <td className="px-4 py-3 text-emerald-600 font-medium">${Number(ch.revenue).toLocaleString()}</td>
-                      <td className="px-4 py-3">
-                        <span className="font-bold text-amber-600">{chRoas}{chRoas !== '∞' ? '%' : ''}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                </div>
+            }
           </div>
-        </div>
 
+          {/* Right column */}
+          <div className="space-y-4">
+
+            {/* Acquisition type */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-sm font-semibold text-slate-700 mb-4">Acquisition Type</h2>
+              <div className="space-y-3">
+                <Bar label="🌱 Lead nurtured" value={nurtured}    max={totalAll || 1} color="bg-amber-400"   sub={pct(nurtured,    totalAll)} />
+                <Bar label="⚡ Direct trial"  value={directTrial} max={totalAll || 1} color="bg-sky-400"     sub={pct(directTrial, totalAll)} />
+                <Bar label="💳 Direct paid"   value={directPaid}  max={totalAll || 1} color="bg-emerald-400" sub={pct(directPaid,  totalAll)} />
+              </div>
+            </div>
+
+            {/* Channel */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-sm font-semibold text-slate-700 mb-4">By Channel</h2>
+              {channels.length === 0
+                ? <p className="text-xs text-slate-300 text-center py-2">No channel data</p>
+                : <div className="space-y-3">
+                    {channels.map(([ch, count]) => (
+                      <Bar key={ch} label={ch} value={count} max={totalAll || 1} color="bg-violet-400" sub={pct(count, totalAll)} />
+                    ))}
+                  </div>
+              }
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   )

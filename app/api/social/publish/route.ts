@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       }
     } else {
       try {
+        const isOrg = conn.platform_user_id?.startsWith('urn:li:organization:')
         const body = {
           author: conn.platform_user_id,
           lifecycleState: 'PUBLISHED',
@@ -54,7 +55,12 @@ export async function POST(req: NextRequest) {
               shareMediaCategory: 'NONE',
             },
           },
-          visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
+          visibility: {
+            ...(isOrg
+              ? { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+              : { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+            ),
+          },
         }
         const res = await fetch('https://api.linkedin.com/v2/ugcPosts', {
           method: 'POST',
@@ -165,6 +171,105 @@ export async function POST(req: NextRequest) {
           }
         } catch (err: unknown) {
           results.Instagram = { success: false, message: err instanceof Error ? err.message : 'Unknown error' }
+        }
+      }
+    }
+  }
+
+  // ── TikTok ────────────────────────────────────────────────────────────────
+  // TikTok requires a video or photo URL — text-only posts are not supported.
+  if (platforms.includes('TikTok')) {
+    const conn = await getConn('tiktok')
+    if (!conn) {
+      results.TikTok = { success: false, message: 'Not connected' }
+    } else {
+      const mediaUrl: string | null = post.media_url ?? null
+
+      if (!mediaUrl) {
+        results.TikTok = {
+          success: false,
+          message: 'TikTok requires a video or image URL — add a media_url to the post',
+        }
+      } else {
+        try {
+          // Determine if video or photo based on media_url extension
+          const isVideo = /\.(mp4|mov|avi|webm)(\?|$)/i.test(mediaUrl)
+
+          if (isVideo) {
+            // ── Video post ──────────────────────────────────────────────────
+            const initRes = await fetch(
+              'https://open.tiktok.com/v2/post/publish/video/init/',
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${conn.access_token}`,
+                  'Content-Type': 'application/json; charset=UTF-8',
+                },
+                body: JSON.stringify({
+                  post_info: {
+                    title:        post.caption?.slice(0, 150) ?? '',
+                    privacy_level: 'PUBLIC_TO_EVERYONE',
+                    disable_duet:  false,
+                    disable_comment: false,
+                    disable_stitch: false,
+                  },
+                  source_info: {
+                    source:    'PULL_FROM_URL',
+                    video_url: mediaUrl,
+                  },
+                }),
+              }
+            )
+            const initData = await initRes.json()
+            if (initData.data?.publish_id) {
+              results.TikTok = { success: true, message: 'Video submitted for publishing!' }
+            } else {
+              results.TikTok = {
+                success: false,
+                message: initData.error?.message ?? `Error ${initRes.status}`,
+              }
+            }
+          } else {
+            // ── Photo post ──────────────────────────────────────────────────
+            const photoRes = await fetch(
+              'https://open.tiktok.com/v2/post/publish/content/init/',
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${conn.access_token}`,
+                  'Content-Type': 'application/json; charset=UTF-8',
+                },
+                body: JSON.stringify({
+                  post_info: {
+                    title:         post.caption?.slice(0, 150) ?? '',
+                    privacy_level: 'PUBLIC_TO_EVERYONE',
+                    disable_comment: false,
+                    photo_cover_index: 0,
+                  },
+                  source_info: {
+                    source:       'PULL_FROM_URL',
+                    photo_images: [mediaUrl],
+                  },
+                  post_mode:    'DIRECT_POST',
+                  media_type:   'PHOTO',
+                }),
+              }
+            )
+            const photoData = await photoRes.json()
+            if (photoData.data?.publish_id) {
+              results.TikTok = { success: true, message: 'Photo submitted for publishing!' }
+            } else {
+              results.TikTok = {
+                success: false,
+                message: photoData.error?.message ?? `Error ${photoRes.status}`,
+              }
+            }
+          }
+        } catch (err: unknown) {
+          results.TikTok = {
+            success: false,
+            message: err instanceof Error ? err.message : 'Unknown error',
+          }
         }
       }
     }

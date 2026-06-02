@@ -4,8 +4,12 @@
     {
       "name": "crm-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "3003"],
-      "port": 3003
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": false,
+      "defaultPath": "/settings",
+      "viewportWidth": 1280,
+      "viewportHeight": 900
     }
   ]
 }

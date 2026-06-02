@@ -36,51 +36,34 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // ── Resolve member URN ─────────────────────────────────────────────────────
-  // Try 1: OpenID Connect /userinfo (needs `openid` scope)
-  // Try 2: v2/me (needs `r_liteprofile` or `profile` scope)
-  // Either gives us the numeric member ID → urn:li:person:{id}
+  // ── Resolve member URN via /v2/me ─────────────────────────────────────────
+  // w_member_social is enough to call /v2/me and get the numeric member id.
   let platformUserId: string | null = null
   let platformUsername = 'LinkedIn'
 
   try {
-    // Attempt 1 — OpenID Connect userinfo
-    const uiRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    const meRes = await fetch('https://api.linkedin.com/v2/me', {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`,
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
     })
-    if (uiRes.ok) {
-      const ui = await uiRes.json()
-      if (ui.sub) {
-        platformUserId   = `urn:li:person:${ui.sub}`
-        // profile scope gives name/given_name; openid-only gives just sub
-        platformUsername = ui.name
-          ?? ([ui.given_name, ui.family_name].filter(Boolean).join(' ') || 'LinkedIn')
-        console.log('LinkedIn URN via userinfo:', platformUserId)
+    console.log('LinkedIn /v2/me status:', meRes.status)
+    if (meRes.ok) {
+      const me = await meRes.json()
+      console.log('LinkedIn /v2/me body:', JSON.stringify(me))
+      if (me.id) {
+        platformUserId = `urn:li:person:${me.id}`
+        const first = me.localizedFirstName ?? ''
+        const last  = me.localizedLastName  ?? ''
+        platformUsername = `${first} ${last}`.trim() || 'LinkedIn'
       }
     } else {
-      console.warn('LinkedIn /userinfo status:', uiRes.status, '— trying /v2/me')
-      // Attempt 2 — classic v2/me
-      const meRes = await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          'X-Restli-Protocol-Version': '2.0.0',
-        },
-      })
-      if (meRes.ok) {
-        const me = await meRes.json()
-        if (me.id) {
-          platformUserId = `urn:li:person:${me.id}`
-          const first = me.localizedFirstName ?? ''
-          const last  = me.localizedLastName  ?? ''
-          platformUsername = `${first} ${last}`.trim() || 'LinkedIn'
-          console.log('LinkedIn URN via /v2/me:', platformUserId)
-        }
-      } else {
-        console.warn('LinkedIn /v2/me status:', meRes.status, '— URN will be null')
-      }
+      const body = await meRes.text()
+      console.warn('LinkedIn /v2/me error body:', body)
     }
   } catch (err) {
-    console.error('Failed to fetch LinkedIn profile:', err)
+    console.error('Failed to fetch LinkedIn /v2/me:', err)
   }
 
   // ── Persist connection ─────────────────────────────────────────────────────

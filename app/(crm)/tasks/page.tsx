@@ -1,546 +1,496 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
-import Badge from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
-import { CheckCircle2, Circle, Plus, X, Loader2, Clock, AlertCircle, Search, Bell, BellOff, Pencil } from 'lucide-react'
+import {
+  Loader2, Clock, AlertCircle, CheckCircle2, Zap,
+  LayoutGrid, List, RefreshCw, Users, GitBranch, RotateCcw, Shield,
+  Snowflake, Send, CheckCircle,
+} from 'lucide-react'
+import Link from 'next/link'
+
+// ── Types ──────────────────────────────────────────────────────────────────
+type TaskStatus = 'open' | 'in_progress' | 'done'
 
 type Task = {
   id: string
   title: string
   contact_id: string | null
   contact_name: string | null
-  deal_id: string | null
-  type: 'Call' | 'Email' | 'Follow-up' | 'Meeting' | 'LinkedIn' | 'WhatsApp' | 'Demo' | 'Proposal' | 'Other'
+  type: string
   priority: 'High' | 'Medium' | 'Low'
   due_date: string | null
-  done: boolean
+  status: TaskStatus
   notes: string | null
-  alarm_at: string | null
-  alarm_triggered: boolean
   created_at: string
 }
 
-const TASK_TYPES = ['Call', 'Email', 'Follow-up', 'Meeting', 'LinkedIn', 'WhatsApp', 'Demo', 'Proposal', 'Other']
-
-const priorityVariant = { High: 'danger', Medium: 'warning', Low: 'neutral' } as const
-const typeVariant: Record<string, 'indigo' | 'info' | 'warning' | 'success' | 'neutral' | 'danger'> = {
-  Call: 'indigo', Email: 'info', 'Follow-up': 'warning', Meeting: 'success',
-  LinkedIn: 'info', WhatsApp: 'success', Demo: 'indigo', Proposal: 'danger', Other: 'neutral',
+type ColdLead = {
+  contact_id: string
+  first_name: string
+  last_name:  string | null
+  email:      string
+  company:    string | null
+  changed_at: string
 }
 
-const ALARM_OFFSETS = [
-  { label: 'No alarm', value: '' },
-  { label: 'In 1 hour', value: '1h' },
-  { label: 'In 2 hours', value: '2h' },
-  { label: 'In 4 hours', value: '4h' },
-  { label: 'In 8 hours', value: '8h' },
-  { label: 'In 1 day', value: '1d' },
-  { label: 'In 2 days', value: '2d' },
-  { label: 'In 3 days', value: '3d' },
-  { label: 'In 1 week', value: '7d' },
+// ── Config ─────────────────────────────────────────────────────────────────
+const STATUS_COLS: { id: TaskStatus; label: string; dot: string; header: string; card: string; border: string; badge: string }[] = [
+  { id: 'open',        label: 'To Do',       dot: 'bg-amber-400',   header: 'text-amber-700',   card: 'bg-amber-50/40',    border: 'border-amber-200',   badge: 'bg-amber-100 text-amber-700'    },
+  { id: 'in_progress', label: 'In Progress', dot: 'bg-blue-400',    header: 'text-blue-700',    card: 'bg-blue-50/40',     border: 'border-blue-200',    badge: 'bg-blue-100 text-blue-700'      },
+  { id: 'done',        label: 'Done',        dot: 'bg-emerald-400', header: 'text-emerald-700', card: 'bg-emerald-50/40',  border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
 ]
 
-function computeAlarmAt(offset: string): string | null {
-  if (!offset) return null
-  const ms: Record<string, number> = {
-    '1h': 3600000, '2h': 7200000, '4h': 14400000, '8h': 28800000,
-    '1d': 86400000, '2d': 172800000, '3d': 259200000, '7d': 604800000,
-  }
-  return new Date(Date.now() + (ms[offset] ?? 0)).toISOString()
+const TYPE_META: Record<string, { color: string; accent: string; icon: React.ReactNode }> = {
+  'Lead Follow-up':    { color: 'bg-orange-100 text-orange-700',  accent: 'bg-orange-400',  icon: <RefreshCw  className="h-3 w-3" /> },
+  'Trial Activation':  { color: 'bg-blue-100 text-blue-700',      accent: 'bg-blue-400',    icon: <Zap        className="h-3 w-3" /> },
+  'Trial Conversion':  { color: 'bg-violet-100 text-violet-700',  accent: 'bg-violet-400',  icon: <GitBranch  className="h-3 w-3" /> },
+  'Win-back':          { color: 'bg-rose-100 text-rose-700',      accent: 'bg-rose-400',    icon: <RotateCcw  className="h-3 w-3" /> },
+  'Retention':         { color: 'bg-emerald-100 text-emerald-700',accent: 'bg-emerald-400', icon: <Shield     className="h-3 w-3" /> },
+  'Re-engage':         { color: 'bg-amber-100 text-amber-700',    accent: 'bg-amber-400',   icon: <Users      className="h-3 w-3" /> },
 }
 
-function formatAlarm(alarmAt: string | null): string | null {
-  if (!alarmAt) return null
-  const diff = new Date(alarmAt).getTime() - Date.now()
-  const abs = Math.abs(diff)
-  const past = diff < 0
-  const mins = Math.floor(abs / 60000)
-  const hours = Math.floor(abs / 3600000)
-  const days = Math.floor(abs / 86400000)
-  if (mins < 60) return past ? `${mins}m overdue` : `in ${mins}m`
-  if (hours < 24) return past ? `${hours}h overdue` : `in ${hours}h`
-  return past ? `${days}d overdue` : `in ${days}d`
+const TYPE_TABS = [
+  { id: 'All',              label: 'All',              icon: LayoutGrid  },
+  { id: 'Lead Follow-up',   label: 'Lead Follow-up',   icon: RefreshCw   },
+  { id: 'Trial Activation', label: 'Trial Activation', icon: Zap         },
+  { id: 'Trial Conversion', label: 'Trial Conversion', icon: GitBranch   },
+  { id: 'Win-back',         label: 'Win-back',         icon: RotateCcw   },
+  { id: 'Retention',        label: 'Retention',        icon: Shield      },
+  { id: 'Re-engage',        label: 'Re-engage',        icon: Users       },
+]
+
+const priorityColor: Record<string, string> = {
+  High:   'bg-red-100 text-red-700',
+  Medium: 'bg-amber-100 text-amber-700',
+  Low:    'bg-gray-100 text-gray-500',
 }
 
-function formatCreatedAt(created: string) {
-  const diff = Date.now() - new Date(created).getTime()
-  const mins = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  if (hours < 24) return `${hours}h ago`
-  if (days < 7) return `${days}d ago`
-  return new Date(created).toLocaleDateString()
+function isOverdue(due: string | null, status: TaskStatus) {
+  if (!due || status === 'done') return false
+  return due < new Date().toISOString().split('T')[0]
 }
-
-const emptyForm = {
-  title: '', contact_name: '', type: 'Follow-up', priority: 'Medium',
-  due_date: '', notes: '', alarm_offset: '',
-}
-
-function isOverdue(due: string | null) {
-  if (!due) return false
-  return new Date(due) < new Date(new Date().toDateString())
-}
-
 function isDueToday(due: string | null) {
   if (!due) return false
   return due === new Date().toISOString().split('T')[0]
 }
+function formatDate(d: string) {
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
-const DAY_FILTERS = ['All', 'Today', 'Overdue', 'Upcoming']
+// ── Task Card ──────────────────────────────────────────────────────────────
+const COLD_COL = { dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-500', label: 'Cold' }
 
+function TaskCard({ task }: { task: Task }) {
+  const overdue = isOverdue(task.due_date, task.status)
+  const today   = isDueToday(task.due_date)
+  const meta    = TYPE_META[task.type]
+  const isCold  = task.status === 'done' && task.type === 'Lead Follow-up' && task.notes?.includes('cold')
+  const col     = isCold ? COLD_COL : STATUS_COLS.find(c => c.id === task.status)!
+
+  return (
+    <div className={`relative rounded-xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition-all ${overdue ? 'border-red-200' : 'border-gray-200'}`}>
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${meta?.accent ?? 'bg-gray-300'}`} />
+      <div className="pl-4 pr-3.5 py-3.5">
+        <p className={`text-sm font-semibold leading-tight mb-1 ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+          {task.title}
+        </p>
+        {task.contact_name && (
+          <p className="text-xs text-slate-500 mb-2">
+            {task.contact_id
+              ? <a href={`/contacts/${task.contact_id}`} className="hover:text-orange-500 transition-colors">{task.contact_name}</a>
+              : task.contact_name}
+          </p>
+        )}
+        {task.notes && <p className="text-xs text-slate-400 italic mb-2 line-clamp-2">{task.notes}</p>}
+        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border ${meta ? meta.color + ' border-current/20' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+            {meta?.icon}{task.type}
+          </span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[task.priority]}`}>{task.priority}</span>
+          {task.due_date && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${overdue ? 'bg-red-100 text-red-600' : today ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+              <Clock className="h-3 w-3" />
+              {overdue ? 'Overdue' : today ? 'Today' : formatDate(task.due_date)}
+            </span>
+          )}
+          <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${col.badge}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${col.dot}`} />{col.label}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── List Row ───────────────────────────────────────────────────────────────
+function TaskRow({ task }: { task: Task }) {
+  const overdue = isOverdue(task.due_date, task.status)
+  const today   = isDueToday(task.due_date)
+  const meta    = TYPE_META[task.type]
+  const isCold  = task.status === 'done' && task.type === 'Lead Follow-up' && task.notes?.includes('cold')
+  const col     = isCold ? COLD_COL : STATUS_COLS.find(c => c.id === task.status)!
+
+  return (
+    <div className={`flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${overdue ? 'bg-red-50/20' : ''}`}>
+      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${col.dot}`} />
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-800'}`}>{task.title}</p>
+        {task.contact_name && (
+          <p className="text-xs text-slate-400 mt-0.5">
+            {task.contact_id
+              ? <a href={`/contacts/${task.contact_id}`} className="hover:text-orange-500">{task.contact_name}</a>
+              : task.contact_name}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border ${meta ? meta.color + ' border-current/20' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+          {meta?.icon}{task.type}
+        </span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[task.priority]}`}>{task.priority}</span>
+        {task.due_date && (
+          <span className={`text-xs flex items-center gap-1 font-medium ${overdue ? 'text-red-600' : today ? 'text-amber-600' : 'text-slate-400'}`}>
+            <Clock className="h-3 w-3" />
+            {overdue ? 'Overdue' : today ? 'Today' : formatDate(task.due_date)}
+          </span>
+        )}
+        <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${col.badge}`}>{col.label}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(emptyForm)
-  const [saving, setSaving] = useState(false)
-  const [dayFilter, setDayFilter] = useState('All')
-  const [typeFilter, setTypeFilter] = useState('All')
-  const [search, setSearch] = useState('')
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
-  const [editForm, setEditForm] = useState(emptyForm)
-  const [editSaving, setEditSaving] = useState(false)
+  const [pageTab, setPageTab]         = useState<'tasks' | 'cold'>('tasks')
+
+  // Tasks state
+  const [tasks, setTasks]             = useState<Task[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(true)
+  const [error, setError]             = useState<string | null>(null)
+  const [activeType, setActiveType]   = useState('All')
+  const [viewMode, setViewMode]       = useState<'kanban' | 'list'>('kanban')
+
+  // Cold leads state
+  const [coldLeads, setColdLeads]     = useState<ColdLead[]>([])
+  const [loadingCold, setLoadingCold] = useState(true)
+  const [sending, setSending]         = useState<string | null>(null)
+  const [sentIds, setSentIds]         = useState<Set<string>>(new Set())
+
+  useEffect(() => { fetchTasks(); fetchColdLeads() }, [])
 
   async function fetchTasks() {
-    setLoading(true)
+    setLoadingTasks(true)
     const { data, error } = await supabase
       .from('tasks')
-      .select('*')
+      .select('id,title,contact_id,contact_name,type,priority,due_date,status,notes,created_at')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
-    else setTasks(data ?? [])
-    setLoading(false)
+    else setTasks((data ?? []) as Task[])
+    setLoadingTasks(false)
   }
 
-  useEffect(() => { fetchTasks() }, [])
+  async function fetchColdLeads() {
+    setLoadingCold(true)
+    const { data } = await supabase
+      .from('contacts_current')
+      .select('contact_id,first_name,last_name,email,company,changed_at')
+      .eq('stage', 'lead')
+      .eq('state', 'cold')
+      .order('changed_at', { ascending: true })
+    setColdLeads((data ?? []) as ColdLead[])
+    setLoadingCold(false)
+  }
 
-  async function addTask(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    const alarm_at = computeAlarmAt(form.alarm_offset)
-    const { data: taskData, error } = await supabase.from('tasks').insert([{
-      title: form.title,
-      contact_name: form.contact_name || null,
-      type: form.type,
-      priority: form.priority,
-      due_date: form.due_date || null,
-      notes: form.notes || null,
-      done: false,
-      alarm_at,
-      alarm_triggered: false,
-    }]).select().single()
-    if (error) { setSaving(false); setError(error.message); return }
-
-    // Auto-create email draft when task type is Email
-    if (form.type === 'Email' && form.contact_name) {
-      // Look up contact email from users table
-      const { data: contact } = await supabase
-        .from('users')
-        .select('email, full_name')
-        .ilike('full_name', `%${form.contact_name.trim()}%`)
-        .limit(1)
-        .single()
-
-      await supabase.from('emails').insert([{
-        to_email: contact?.email ?? '',
-        to_name: form.contact_name,
-        contact_name: form.contact_name,
-        subject: `Follow-up: ${form.title}`,
-        body: '',
-        status: 'draft',
-        task_id: taskData?.id ?? null,
-        template_name: null,
-      }])
+  async function sendLastChance(contactId: string | 'all') {
+    setSending(contactId)
+    try {
+      const body = contactId === 'all' ? { all: true } : { contact_id: contactId }
+      const res  = await fetch('/api/leads/last-chance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (contactId === 'all') {
+        setSentIds(new Set(coldLeads.map(l => l.contact_id)))
+      } else if (json.success) {
+        setSentIds(prev => new Set([...prev, contactId]))
+      }
+    } finally {
+      setSending(null)
     }
-
-    setSaving(false)
-    setShowForm(false)
-    setForm(emptyForm)
-    fetchTasks()
   }
 
-  async function toggleDone(task: Task) {
-    await supabase.from('tasks').update({ done: !task.done }).eq('id', task.id)
-    fetchTasks()
-  }
-
-  async function deleteTask(id: string) {
-    await supabase.from('tasks').delete().eq('id', id)
-    fetchTasks()
-  }
-
-  async function dismissAlarm(task: Task) {
-    await supabase.from('tasks').update({ alarm_triggered: true }).eq('id', task.id)
-    fetchTasks()
-  }
-
-  function openEdit(task: Task) {
-    setEditingTask(task)
-    setEditForm({
-      title: task.title,
-      contact_name: task.contact_name ?? '',
-      type: task.type,
-      priority: task.priority,
-      due_date: task.due_date ?? '',
-      notes: task.notes ?? '',
-      alarm_offset: '',
-    })
-  }
-
-  async function saveEdit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!editingTask) return
-    setEditSaving(true)
-    const { error } = await supabase.from('tasks').update({
-      title: editForm.title,
-      contact_name: editForm.contact_name || null,
-      type: editForm.type,
-      priority: editForm.priority,
-      due_date: editForm.due_date || null,
-      notes: editForm.notes || null,
-    }).eq('id', editingTask.id)
-    setEditSaving(false)
-    if (error) { setError(error.message); return }
-    setEditingTask(null)
-    fetchTasks()
-  }
-
-  const filtered = tasks.filter(t => {
-    const q = search.toLowerCase()
-    const matchSearch = !q || t.title.toLowerCase().includes(q) || (t.contact_name ?? '').toLowerCase().includes(q)
-    const matchType = typeFilter === 'All' || t.type === typeFilter
-    const matchDay =
-      dayFilter === 'All' ? true :
-      dayFilter === 'Today' ? isDueToday(t.due_date) :
-      dayFilter === 'Overdue' ? isOverdue(t.due_date) && !t.done :
-      dayFilter === 'Upcoming' ? (t.due_date ? !isOverdue(t.due_date) && !isDueToday(t.due_date) : false) :
-      true
-    return matchSearch && matchType && matchDay
-  })
-
-  const pending = filtered.filter(t => !t.done)
-  const done = filtered.filter(t => t.done)
-
-  const todayCount = tasks.filter(t => isDueToday(t.due_date) && !t.done).length
-  const overdueCount = tasks.filter(t => isOverdue(t.due_date) && !t.done).length
-  const pendingCount = tasks.filter(t => !t.done).length
-  const doneCount = tasks.filter(t => t.done).length
-  const alarmCount = tasks.filter(t => t.alarm_at && !t.alarm_triggered && !t.done && new Date(t.alarm_at) <= new Date()).length
-
-  const cls = 'px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700'
+  const filtered        = tasks.filter(t => activeType === 'All' || t.type === activeType)
+  const todoCount       = tasks.filter(t => t.status === 'open').length
+  const inProgressCount = tasks.filter(t => t.status === 'in_progress').length
+  const doneCount       = tasks.filter(t => t.status === 'done').length
+  const overdueCount    = tasks.filter(t => isOverdue(t.due_date, t.status)).length
+  const daysSince       = (ts: string) => Math.floor((Date.now() - new Date(ts).getTime()) / 86400000)
 
   return (
     <div>
       <Header
         title="Tasks"
-        subtitle={`${pendingCount} pending · ${alarmCount > 0 ? `${alarmCount} alarm${alarmCount > 1 ? 's' : ''} due` : 'no alarms due'}`}
+        subtitle={`${todoCount + inProgressCount} active · ${overdueCount > 0 ? `${overdueCount} overdue` : 'all on track'} · auto-managed by lifecycle`}
       />
-      <div className="p-6 space-y-6">
 
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-500/20 px-4 py-3 text-sm text-red-600 flex justify-between">
-            {error}<button onClick={() => setError(null)}><X className="h-4 w-4" /></button>
-          </div>
-        )}
+      <div className="p-6 space-y-5">
 
-        {/* Alarm banner */}
-        {alarmCount > 0 && (
-          <div className="rounded-lg bg-amber-50 border border-amber-300 px-4 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Bell className="h-4 w-4 text-amber-600 animate-pulse" />
-              <p className="text-sm font-medium text-amber-800">
-                {alarmCount} task alarm{alarmCount > 1 ? 's are' : ' is'} due right now
-              </p>
-            </div>
-            <a href="/alarms" className="text-xs font-semibold text-amber-700 underline hover:text-amber-900">View Alarms →</a>
-          </div>
-        )}
-
-        {/* Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Due Today', value: todayCount, color: 'text-red-600', bg: 'bg-red-50' },
-            { label: 'Overdue', value: overdueCount, color: 'text-orange-500', bg: 'bg-orange-50' },
-            { label: 'Pending', value: pendingCount, color: 'text-amber-600', bg: 'bg-amber-50' },
-            { label: 'Completed', value: doneCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          ].map(s => (
-            <div key={s.label} className={`rounded-xl border border-gray-200 ${s.bg} p-4`}>
-              <p className="text-xs text-slate-500">{s.label}</p>
-              <p className={`text-2xl font-bold mt-1 ${s.color}`}>
-                {loading ? <span className="animate-pulse bg-gray-100 rounded h-7 w-8 inline-block" /> : s.value}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* Filters row */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap flex-1">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search title or contact..."
-                className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 w-52"
-              />
-            </div>
-            {/* Day filters */}
-            {DAY_FILTERS.map(f => (
-              <button key={f} onClick={() => setDayFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  dayFilter === f ? 'bg-orange-500 text-white' : 'bg-white border border-gray-200 text-slate-500 hover:text-slate-700'
-                }`}>
-                {f}
-                {f === 'Overdue' && overdueCount > 0 && (
-                  <span className="ml-1.5 bg-red-500 text-white rounded-full px-1.5 py-0.5 text-xs">{overdueCount}</span>
-                )}
-              </button>
-            ))}
-            {/* Type filter */}
-            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500">
-              {['All', ...TASK_TYPES].map(t => <option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <button onClick={() => setShowForm(v => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 transition-colors">
-            <Plus className="h-4 w-4" /> Add Task
+        {/* ── Page-level tabs ──────────────────────────────────────────────── */}
+        <div className="flex items-center gap-1 border-b border-gray-200">
+          <button
+            onClick={() => setPageTab('tasks')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              pageTab === 'tasks' ? 'border-orange-500 text-orange-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Tasks
+            {(todoCount + inProgressCount) > 0 && (
+              <span className={`text-xs rounded-full px-1.5 py-0.5 font-semibold ${pageTab === 'tasks' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-slate-500'}`}>
+                {todoCount + inProgressCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setPageTab('cold')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              pageTab === 'cold' ? 'border-slate-500 text-slate-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Snowflake className="h-4 w-4" />
+            Cold Leads
+            {coldLeads.length > 0 && (
+              <span className={`text-xs rounded-full px-1.5 py-0.5 font-semibold ${pageTab === 'cold' ? 'bg-slate-100 text-slate-600' : 'bg-gray-100 text-slate-500'}`}>
+                {coldLeads.length}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Add Task Form */}
-        {showForm && (
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-900">Add New Task</h3>
-              <button onClick={() => setShowForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
+        {/* ══════════════════════════════════════════════════════════════════
+            TASKS TAB
+        ══════════════════════════════════════════════════════════════════ */}
+        {pageTab === 'tasks' && (
+          <>
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>
+            )}
+
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'To Do',       value: todoCount,       icon: <Clock        className="h-4 w-4" />, color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-200'   },
+                { label: 'In Progress', value: inProgressCount, icon: <Zap          className="h-4 w-4" />, color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
+                { label: 'Done',        value: doneCount,       icon: <CheckCircle2 className="h-4 w-4" />, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+                { label: 'Overdue',     value: overdueCount,    icon: <AlertCircle  className="h-4 w-4" />, color: 'text-red-600',     bg: 'bg-red-50',     border: 'border-red-200'     },
+              ].map(s => (
+                <div key={s.label} className={`rounded-xl border ${s.border} ${s.bg} p-4 flex items-center gap-3`}>
+                  <div className={s.color}>{s.icon}</div>
+                  <div>
+                    <p className="text-xs text-slate-500">{s.label}</p>
+                    <p className={`text-2xl font-bold ${s.color}`}>
+                      {loadingTasks ? <span className="animate-pulse bg-gray-200 rounded h-7 w-8 inline-block" /> : s.value}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <form onSubmit={addTask} className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="col-span-2 flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Task <span className="text-red-500">*</span></label>
-                <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  placeholder="e.g. Call back — interested in Pro plan" className={cls} />
+
+            {/* Type tabs + view toggle */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 flex-1">
+                {TYPE_TABS.map(tab => {
+                  const Icon  = tab.icon
+                  const count = tab.id === 'All'
+                    ? tasks.filter(t => t.status !== 'done').length
+                    : tasks.filter(t => t.type === tab.id && t.status !== 'done').length
+                  return (
+                    <button key={tab.id}
+                      onClick={() => setActiveType(tab.id)}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                        activeType === tab.id
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'bg-white border border-gray-200 text-slate-500 hover:border-orange-300 hover:text-orange-500'
+                      }`}>
+                      <Icon className="h-3.5 w-3.5" />
+                      {tab.label}
+                      {count > 0 && (
+                        <span className={`text-xs rounded-full px-1.5 py-0.5 font-bold ${activeType === tab.id ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600'}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Contact</label>
-                <input value={form.contact_name} onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))}
-                  placeholder="Contact name" className={cls} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Due Date</label>
-                <input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} className={cls} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Type</label>
-                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={cls}>
-                  {TASK_TYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Priority</label>
-                <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))} className={cls}>
-                  {['High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                  <Bell className="h-3 w-3" /> Set Alarm
-                </label>
-                <select value={form.alarm_offset} onChange={e => setForm(f => ({ ...f, alarm_offset: e.target.value }))} className={cls}>
-                  {ALARM_OFFSETS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2 flex flex-col gap-1">
-                <label className="text-xs font-medium text-slate-500">Notes</label>
-                <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className={cls} />
-              </div>
-              <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowForm(false)}
-                  className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={saving}
-                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
-                  {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {saving ? 'Saving...' : 'Save Task'}
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
+                <button onClick={() => setViewMode('kanban')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <LayoutGrid className="h-3.5 w-3.5" /> Board
+                </button>
+                <button onClick={() => setViewMode('list')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <List className="h-3.5 w-3.5" /> List
                 </button>
               </div>
-            </form>
-          </div>
-        )}
-
-        {/* Edit Task Modal */}
-        {editingTask && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm px-4">
-            <div className="w-full max-w-2xl rounded-xl border border-gray-200 bg-white p-6 shadow-2xl">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-semibold text-slate-900">Edit Task</h3>
-                <button onClick={() => setEditingTask(null)}><X className="h-4 w-4 text-slate-400" /></button>
-              </div>
-              <form onSubmit={saveEdit} className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="col-span-2 flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Task <span className="text-red-500">*</span></label>
-                  <input required value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                    className={cls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Contact</label>
-                  <input value={editForm.contact_name} onChange={e => setEditForm(f => ({ ...f, contact_name: e.target.value }))}
-                    className={cls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Due Date</label>
-                  <input type="date" value={editForm.due_date} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))}
-                    className={cls} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Type</label>
-                  <select value={editForm.type} onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))} className={cls}>
-                    {TASK_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Priority</label>
-                  <select value={editForm.priority} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))} className={cls}>
-                    {['High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-2 flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Notes</label>
-                  <input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} className={cls} />
-                </div>
-                <div className="col-span-2 md:col-span-4 flex justify-end gap-2 pt-1">
-                  <button type="button" onClick={() => setEditingTask(null)}
-                    className="px-4 py-2 text-sm text-slate-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-                  <button type="submit" disabled={editSaving}
-                    className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
-                    {editSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {editSaving ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </div>
-              </form>
             </div>
-          </div>
+
+            {/* Kanban */}
+            {!loadingTasks && viewMode === 'kanban' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {STATUS_COLS.map(col => {
+                  const colTasks = filtered.filter(t => t.status === col.id)
+                  return (
+                    <div key={col.id} className={`rounded-xl border ${col.border} overflow-hidden`}>
+                      <div className={`px-4 py-3 border-b ${col.border} bg-white flex items-center gap-2`}>
+                        <span className={`h-2.5 w-2.5 rounded-full ${col.dot}`} />
+                        <span className={`text-sm font-semibold ${col.header}`}>{col.label}</span>
+                        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-bold ${col.badge}`}>{colTasks.length}</span>
+                      </div>
+                      <div className={`p-3 space-y-2.5 min-h-[200px] ${col.card}`}>
+                        {colTasks.length === 0
+                          ? <div className="flex items-center justify-center h-24 text-xs text-slate-400">No {col.label.toLowerCase()} tasks</div>
+                          : colTasks.map(task => <TaskCard key={task.id} task={task} />)
+                        }
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* List */}
+            {!loadingTasks && viewMode === 'list' && (
+              <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-5 py-2.5 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <div className="col-span-1" />
+                  <div className="col-span-5">Task</div>
+                  <div className="col-span-4">Type · Priority · Due</div>
+                  <div className="col-span-2 text-right">Status</div>
+                </div>
+                {filtered.length === 0
+                  ? <div className="py-16 text-center text-sm text-slate-400">No tasks found</div>
+                  : filtered.map(task => <TaskRow key={task.id} task={task} />)
+                }
+              </div>
+            )}
+
+            {loadingTasks && (
+              <div className="flex items-center justify-center py-20 gap-2 text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+              </div>
+            )}
+
+            {!loadingTasks && tasks.length > 0 && (
+              <p className="text-center text-xs text-slate-400">
+                ⚡ Tasks are created and updated automatically by the lifecycle engine
+              </p>
+            )}
+          </>
         )}
 
-        {/* Task List */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20 gap-2 text-slate-500">
-            <Loader2 className="h-5 w-5 animate-spin" /> Loading tasks...
-          </div>
-        ) : (
+        {/* ══════════════════════════════════════════════════════════════════
+            COLD LEADS TAB
+        ══════════════════════════════════════════════════════════════════ */}
+        {pageTab === 'cold' && (
           <div className="space-y-4">
-            {/* Pending */}
-            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pending ({pending.length})</p>
+
+            {/* Header row */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Leads with no trial signup after <span className="font-semibold">30 days</span>. Automatic emails have stopped — send a manual last chance email to re-engage them.
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  If they sign up after receiving this email, they'll auto-upgrade to trial.
+                </p>
               </div>
-              {pending.length === 0 ? (
-                <div className="text-center py-10 text-slate-400 text-sm">
-                  {tasks.length === 0 ? 'No tasks yet — click Add Task to create one.' : 'No tasks match this filter.'}
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {pending.map(task => {
-                    const alarmDue = task.alarm_at && !task.alarm_triggered && new Date(task.alarm_at) <= new Date()
-                    const alarmPending = task.alarm_at && !task.alarm_triggered && new Date(task.alarm_at) > new Date()
-                    return (
-                      <div key={task.id} className={`flex items-start gap-3 px-5 py-4 hover:bg-gray-50 transition-colors ${
-                        alarmDue ? 'bg-amber-50/70' : isOverdue(task.due_date) ? 'bg-red-500/5' : ''
-                      }`}>
-                        <button onClick={() => toggleDone(task)} className="mt-0.5 shrink-0">
-                          <Circle className="h-5 w-5 text-slate-400 hover:text-orange-500 transition-colors" />
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-900">{task.title}</p>
-                          {task.contact_name && (
-                            <p className="text-xs text-slate-500 mt-0.5">{task.contact_name}</p>
-                          )}
-                          {task.notes && (
-                            <p className="text-xs text-slate-400 mt-1 italic">{task.notes}</p>
-                          )}
-                          {/* Alarm indicators */}
-                          {alarmDue && (
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <Bell className="h-3.5 w-3.5 text-amber-600 animate-pulse shrink-0" />
-                              <span className="text-xs font-semibold text-amber-700">Alarm: {formatAlarm(task.alarm_at)}</span>
-                              <button onClick={() => dismissAlarm(task)}
-                                className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 ml-1">
-                                <BellOff className="h-3 w-3" /> dismiss
-                              </button>
-                            </div>
-                          )}
-                          {alarmPending && (
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <Bell className="h-3 w-3 text-slate-300" />
-                              <span className="text-xs text-slate-400">Alarm {formatAlarm(task.alarm_at)}</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                          <Badge label={task.type} variant={typeVariant[task.type]} />
-                          <Badge label={task.priority} variant={priorityVariant[task.priority]} />
-                          {task.due_date && (
-                            <div className={`flex items-center gap-1 text-xs font-medium ${
-                              isOverdue(task.due_date) ? 'text-red-600' :
-                              isDueToday(task.due_date) ? 'text-amber-600' : 'text-slate-500'
-                            }`}>
-                              {isOverdue(task.due_date) ? <AlertCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                              {isOverdue(task.due_date) ? 'Overdue' : isDueToday(task.due_date) ? 'Today' : task.due_date}
-                            </div>
-                          )}
-                          <span className="text-xs text-slate-300">{formatCreatedAt(task.created_at)}</span>
-                          <button onClick={() => openEdit(task)} className="text-slate-400 hover:text-orange-500 transition-colors">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button onClick={() => deleteTask(task.id)} className="text-slate-400 hover:text-red-600 transition-colors">
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+              {coldLeads.length > 0 && (
+                <button
+                  onClick={() => sendLastChance('all')}
+                  disabled={sending !== null}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-50 transition-colors shrink-0 ml-4"
+                >
+                  {sending === 'all' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Send to All
+                </button>
               )}
             </div>
 
-            {/* Completed */}
-            {done.length > 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Completed ({done.length})</p>
+            {/* Table */}
+            <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              {loadingCold ? (
+                <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
-                <div className="divide-y divide-gray-100">
-                  {done.map(task => (
-                    <div key={task.id} className="flex items-start gap-3 px-5 py-3 opacity-50 hover:opacity-70 transition-opacity">
-                      <button onClick={() => toggleDone(task)} className="mt-0.5 shrink-0">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                      </button>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-500 line-through">{task.title}</p>
-                        {task.contact_name && <p className="text-xs text-slate-400">{task.contact_name}</p>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-300">{formatCreatedAt(task.created_at)}</span>
-                        <button onClick={() => openEdit(task)} className="text-slate-400 hover:text-orange-500 transition-colors">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => deleteTask(task.id)} className="text-slate-400 hover:text-red-600 transition-colors">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              ) : coldLeads.length === 0 ? (
+                <div className="text-center py-16">
+                  <Snowflake className="h-10 w-10 mx-auto mb-3 text-slate-200" />
+                  <p className="text-sm font-medium text-slate-500">No cold leads</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                    Leads that receive no trial signup after 30 days are automatically moved here
+                  </p>
                 </div>
-              </div>
-            )}
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-slate-50">
+                      <th className="text-left px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Lead</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Company</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Cold since</th>
+                      <th className="text-right px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {coldLeads.map(lead => {
+                      const alreadySent = sentIds.has(lead.contact_id)
+                      const days        = daysSince(lead.changed_at)
+                      const name        = [lead.first_name, lead.last_name].filter(Boolean).join(' ')
+                      return (
+                        <tr key={lead.contact_id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <Link href={`/contacts/${lead.contact_id}`} className="group">
+                              <p className="font-medium text-slate-800 group-hover:text-orange-600 transition-colors">{name}</p>
+                              <p className="text-xs text-slate-400">{lead.email}</p>
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3.5 text-xs text-slate-500">{lead.company ?? '—'}</td>
+                          <td className="px-4 py-3.5">
+                            <span className={`text-xs font-medium ${days > 60 ? 'text-red-500' : 'text-slate-500'}`}>
+                              {days}d ago
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            {alreadySent ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                                <CheckCircle className="h-3.5 w-3.5" /> Sent
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => sendLastChance(lead.contact_id)}
+                                disabled={sending !== null}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+                              >
+                                {sending === lead.contact_id
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <Send className="h-3 w-3" />
+                                }
+                                Send Last Chance
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         )}
+
       </div>
     </div>
   )

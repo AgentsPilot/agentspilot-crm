@@ -37,44 +37,34 @@ function LandingForm() {
     setSaving(true)
     setError(null)
 
-    const { data: contactData, error: contactError } = await supabase.from('users').insert([{
-      full_name: form.full_name.trim(),
-      email: form.email.trim().toLowerCase(),
-      phone: form.phone.trim() || null,
-      channel: getChannel(utm.utm_source),
-      campaign_name: utm.utm_campaign ?? null,
-      utm_source: utm.utm_source,
-      utm_medium: utm.utm_medium,
-      utm_campaign: utm.utm_campaign,
-      utm_content: utm.utm_content,
-      utm_term: utm.utm_term,
-      status: 'lead',
-      funnel_level: 'Awareness',
-      lead_score: 10,
-    }]).select().single()
+    // Post to /api/leads which writes contacts + contact_stages + task + email
+    const nameParts = form.full_name.trim().split(' ')
+    const res = await fetch('/api/leads', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        first_name:   nameParts[0],
+        last_name:    nameParts.slice(1).join(' ') || undefined,
+        email:        form.email.trim().toLowerCase(),
+        phone:        form.phone.trim() || undefined,
+        channel:      getChannel(utm.utm_source),
+        utm_source:   utm.utm_source,
+        utm_medium:   utm.utm_medium   ?? undefined,
+        utm_campaign: utm.utm_campaign ?? undefined,
+        source:       'social',
+      }),
+    })
 
-    if (contactError) {
+    if (!res.ok) {
       setSaving(false)
-      if (contactError.code === '23505') {
+      const body = await res.json()
+      if (body.error?.includes('duplicate') || body.error?.includes('unique')) {
         setError('This email is already registered. Try a different email.')
       } else {
         setError('Something went wrong. Please try again.')
       }
       return
     }
-
-    // Auto-create draft pipeline deal
-    await supabase.from('pipeline_deals').insert([{
-      contact_name: form.full_name.trim(),
-      contact_email: form.email.trim().toLowerCase(),
-      channel: getChannel(utm.utm_source),
-      campaign_name: utm.utm_campaign ?? null,
-      stage: 'New Lead',
-      priority: 'Medium',
-      value: 0,
-      is_draft: true,
-      notes: `Auto-created from landing page. Source: ${utm.utm_source}`,
-    }])
 
     setSaving(false)
     setDone(true)
