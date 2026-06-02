@@ -240,6 +240,9 @@ export default function SocialPage() {
   })
   const [designUploading, setDesignUploading] = useState(false)
   const [cardDesignUploading, setCardDesignUploading] = useState<string | null>(null) // template title being uploaded
+  const [showCanvaPicker, setShowCanvaPicker] = useState(false)
+  const [canvaDesigns, setCanvaDesigns] = useState<{ id: string; title: string; thumbnail: string; edit_url: string }[]>([])
+  const [canvaSearchQuery, setCanvaSearchQuery] = useState('')
   // Post preview modal
   const [showPostPreview, setShowPostPreview] = useState(false)
   const [selectedDesign, setSelectedDesign] = useState<{ url?: string | null; design_url?: string | null } | null>(null)
@@ -579,6 +582,15 @@ export default function SocialPage() {
     await supabase.from('post_templates').update({ design_preview_url: publicUrl }).eq('id', dbT.id)
     setCardDesignUploading(null)
     fetchTemplates()
+  }
+
+  async function openCanvaPicker() {
+    if (canvaDesigns.length === 0) {
+      const res = await fetch('/api/canva/designs')
+      const json = await res.json()
+      setCanvaDesigns(json.designs || [])
+    }
+    setShowCanvaPicker(true)
   }
 
   async function saveTemplate(e: React.FormEvent) {
@@ -1887,9 +1899,16 @@ export default function SocialPage() {
                   </div>
                 )}
 
+                {/* Pick from Canva */}
+                <button type="button" onClick={openCanvaPicker}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-[#7c3aed]"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z"/></svg>
+                  Pick from Canva
+                </button>
+
                 {/* Upload or URL */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Design Image <span className="text-slate-400">(upload or paste URL)</span></label>
+                  <label className="text-xs font-medium text-slate-500">Or upload / paste URL</label>
                   <div className="flex gap-2">
                     <label className={`flex items-center gap-2 px-3 py-2 text-xs border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 ${designUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                       {designUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-400" /> : <Upload className="h-3.5 w-3.5 text-slate-400" />}
@@ -1936,6 +1955,73 @@ export default function SocialPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Canva Design Picker Modal ────────────────────────────────────────── */}
+      {showCanvaPicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-[#7c3aed]"><circle cx="12" cy="12" r="10"/><path fill="white" d="M12 6a6 6 0 100 12A6 6 0 0012 6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>
+                <h3 className="text-sm font-semibold text-slate-900">Pick from Canva</h3>
+                <span className="text-xs text-slate-400">{canvaDesigns.length} designs</span>
+              </div>
+              <button onClick={() => setShowCanvaPicker(false)}><X className="h-4 w-4 text-slate-400" /></button>
+            </div>
+            <div className="px-6 py-3 border-b border-gray-100">
+              <input
+                value={canvaSearchQuery}
+                onChange={e => setCanvaSearchQuery(e.target.value)}
+                placeholder="Search designs…"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/40"
+                autoFocus
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              <div className="grid grid-cols-3 gap-3">
+                {canvaDesigns
+                  .filter(d => !canvaSearchQuery || d.title.toLowerCase().includes(canvaSearchQuery.toLowerCase()))
+                  .map(design => (
+                    <button
+                      key={design.id}
+                      type="button"
+                      onClick={() => {
+                        setTemplateForm(f => ({ ...f, design_preview_url: design.thumbnail, design_url: design.edit_url }))
+                        setShowCanvaPicker(false)
+                        setCanvaSearchQuery('')
+                      }}
+                      className="group rounded-xl border border-gray-200 overflow-hidden hover:border-[#7c3aed] hover:shadow-md transition-all text-left">
+                      <div className="relative w-full aspect-[4/5] bg-gray-100 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={design.thumbnail} alt={design.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                        <div className="absolute inset-0 bg-[#7c3aed]/0 group-hover:bg-[#7c3aed]/10 transition-colors flex items-center justify-center">
+                          <span className="opacity-0 group-hover:opacity-100 bg-[#7c3aed] text-white text-xs font-medium px-3 py-1.5 rounded-full transition-opacity">
+                            Select
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-tight">{design.title || 'Untitled'}</p>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+              {canvaDesigns.filter(d => !canvaSearchQuery || d.title.toLowerCase().includes(canvaSearchQuery.toLowerCase())).length === 0 && (
+                <p className="text-center text-sm text-slate-400 py-10">No designs match "{canvaSearchQuery}"</p>
+              )}
+            </div>
+            <div className="border-t border-gray-100 px-6 py-3 flex items-center justify-between">
+              <p className="text-xs text-slate-400">Designs synced from your Canva account</p>
+              <button
+                type="button"
+                onClick={() => setShowCanvaPicker(false)}
+                className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5 border border-gray-200 rounded-lg">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
