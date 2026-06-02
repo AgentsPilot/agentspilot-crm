@@ -239,6 +239,7 @@ export default function SocialPage() {
     design_url: '', design_preview_url: '',
   })
   const [designUploading, setDesignUploading] = useState(false)
+  const [cardDesignUploading, setCardDesignUploading] = useState<string | null>(null) // template title being uploaded
   // Post preview modal
   const [showPostPreview, setShowPostPreview] = useState(false)
   const [selectedDesign, setSelectedDesign] = useState<{ url?: string | null; design_url?: string | null } | null>(null)
@@ -563,6 +564,21 @@ export default function SocialPage() {
     const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
     setDesignUploading(false)
     return publicUrl
+  }
+
+  async function uploadCardDesign(templateTitle: string, file: File) {
+    // Find matching DB template by title
+    const dbT = dbTemplates.find(t => t.title === templateTitle)
+    if (!dbT) return
+    setCardDesignUploading(templateTitle)
+    const ext = file.name.split('.').pop()
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+    const { data, error } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+    if (error || !data) { setCardDesignUploading(null); return }
+    const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
+    await supabase.from('post_templates').update({ design_preview_url: publicUrl }).eq('id', dbT.id)
+    setCardDesignUploading(null)
+    fetchTemplates()
   }
 
   async function saveTemplate(e: React.FormEvent) {
@@ -1325,6 +1341,7 @@ export default function SocialPage() {
                 <div className="space-y-2">
                   {activeTemplates.map(t => {
                     const tDesign = t as ActiveTemplate
+                    const isUploading = cardDesignUploading === t.collateral
                     return (
                       <div key={t.collateral}
                         onClick={() => applyTemplate(t)}
@@ -1333,28 +1350,53 @@ export default function SocialPage() {
                             ? 'border-orange-500/40 bg-orange-50'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}>
-                        {/* Design thumbnail */}
+                        {/* Design thumbnail or upload area */}
                         {tDesign.design_preview_url ? (
-                          <div className="relative w-full h-24 bg-gray-100 overflow-hidden">
+                          <div className="relative w-full h-28 bg-gray-100 overflow-hidden group">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={tDesign.design_preview_url} alt={t.collateral} className="w-full h-full object-cover" />
+                            {/* Hover overlay to replace image */}
+                            <label
+                              onClick={e => e.stopPropagation()}
+                              className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                              <span className="text-white text-xs font-medium flex items-center gap-1">
+                                <Upload className="h-3.5 w-3.5" /> Replace
+                              </span>
+                              <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                                const file = e.target.files?.[0]
+                                if (file) await uploadCardDesign(t.collateral, file)
+                                e.target.value = ''
+                              }} />
+                            </label>
                             {tDesign.design_url && (
                               <a href={tDesign.design_url} target="_blank" rel="noreferrer"
                                 onClick={e => e.stopPropagation()}
                                 className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-white rounded px-1.5 py-0.5 text-xs font-medium text-blue-600 flex items-center gap-1 shadow-sm">
-                                <ExternalLink className="h-3 w-3" /> Design
+                                <ExternalLink className="h-3 w-3" /> Canva
                               </a>
                             )}
                           </div>
-                        ) : tDesign.design_url ? (
-                          <div className="w-full h-10 bg-blue-50 flex items-center justify-center border-b border-blue-100">
-                            <a href={tDesign.design_url} target="_blank" rel="noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="text-xs font-medium text-blue-600 flex items-center gap-1 hover:underline">
-                              <ExternalLink className="h-3 w-3" /> Open design in Canva
-                            </a>
-                          </div>
-                        ) : null}
+                        ) : (
+                          <label
+                            onClick={e => e.stopPropagation()}
+                            className={`w-full h-16 flex flex-col items-center justify-center gap-1 border-b border-dashed border-gray-200 cursor-pointer transition-colors ${
+                              isUploading ? 'bg-orange-50' : 'bg-gray-50 hover:bg-orange-50'
+                            }`}>
+                            {isUploading
+                              ? <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
+                              : <ImageIcon className="h-4 w-4 text-gray-300" />}
+                            <span className="text-xs text-gray-400">
+                              {isUploading ? 'Uploading…' : 'Add design'}
+                            </span>
+                            {!isUploading && (
+                              <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                                const file = e.target.files?.[0]
+                                if (file) await uploadCardDesign(t.collateral, file)
+                                e.target.value = ''
+                              }} />
+                            )}
+                          </label>
+                        )}
                         <div className="p-3">
                           <p className="text-xs font-semibold text-slate-800">{t.collateral}</p>
                           <p className="text-xs text-slate-500 mt-0.5 truncate">{t.platforms}</p>
