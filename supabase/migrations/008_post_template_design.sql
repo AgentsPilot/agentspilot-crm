@@ -20,14 +20,38 @@ values ('post-designs', 'post-designs', true)
 on conflict (id) do nothing;
 
 -- Allow authenticated and anon users to upload/read
-create policy if not exists "Public read post-designs"
-  on storage.objects for select
-  using (bucket_id = 'post-designs');
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+    and policyname = 'Public read post-designs'
+  ) then
+    create policy "Public read post-designs"
+      on storage.objects for select
+      using (bucket_id = 'post-designs');
+  end if;
+end $$;
 
-create policy if not exists "Auth upload post-designs"
-  on storage.objects for insert
-  with check (bucket_id = 'post-designs');
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+    and policyname = 'Auth upload post-designs'
+  ) then
+    create policy "Auth upload post-designs"
+      on storage.objects for insert
+      with check (bucket_id = 'post-designs');
+  end if;
+end $$;
 
-create policy if not exists "Auth delete post-designs"
-  on storage.objects for delete
-  using (bucket_id = 'post-designs');
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+    and policyname = 'Auth delete post-designs'
+  ) then
+    create policy "Auth delete post-designs"
+      on storage.objects for delete
+      using (bucket_id = 'post-designs');
+  end if;
+end $$;
