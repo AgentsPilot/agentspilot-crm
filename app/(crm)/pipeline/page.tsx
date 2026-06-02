@@ -533,3 +533,4 @@ export default function LifecycleFunnelPage() {
     </div>
   )
 }
+

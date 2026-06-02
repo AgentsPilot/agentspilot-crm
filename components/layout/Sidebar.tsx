@@ -51,6 +51,12 @@ const nav = [
       { label: 'Reports', href: '/reports', icon: BarChart2 },
     ],
   },
+  {
+    section: 'Admin',
+    items: [
+      { label: 'Social Manager', href: '/social', icon: Share2, admin: true },
+    ],
+  },
 ]
 
 export default function Sidebar() {
@@ -90,7 +96,7 @@ export default function Sidebar() {
               {section}
             </p>
             <div className="space-y-0.5">
-              {items.map(({ label, href, icon: Icon }) => {
+              {items.map(({ label, href, icon: Icon, admin }) => {
                 const active = pathname === href || pathname.startsWith(href + '/')
                 return (
                   <Link
@@ -104,6 +110,9 @@ export default function Sidebar() {
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="flex-1">{label}</span>
+                    {admin && !active && (
+                      <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded font-medium">Admin</span>
+                    )}
                     {active && <ChevronRight className="h-3 w-3 opacity-60" />}
                   </Link>
                 )

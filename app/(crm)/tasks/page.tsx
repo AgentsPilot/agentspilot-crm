@@ -22,6 +22,8 @@ type Task = {
   due_date: string | null
   status: TaskStatus
   notes: string | null
+  alarm_at: string | null
+  alarm_triggered: boolean
   created_at: string
 }
 
