@@ -1366,7 +1366,18 @@ export default function SocialPage() {
                           </div>
                         )}
                         <div className="p-3">
-                          <p className="text-xs font-semibold text-slate-800">{t.collateral}</p>
+                          <div className="flex items-start justify-between gap-1">
+                            <p className="text-xs font-semibold text-slate-800 flex-1">{t.collateral}</p>
+                            {dbTemplates.find(d => d.title === t.collateral) && (
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); openEditTemplate(dbTemplates.find(d => d.title === t.collateral)!) }}
+                                className="shrink-0 text-slate-300 hover:text-orange-500 transition-colors"
+                                title="Edit template">
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 mt-0.5 truncate">{t.platforms}</p>
                           <p className="text-xs text-slate-400 mt-1 line-clamp-2">{t.caption}</p>
                           {selectedTemplate === t.collateral && (
