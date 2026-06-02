@@ -51,25 +51,17 @@ const nav = [
       { label: 'Reports', href: '/reports', icon: BarChart2 },
     ],
   },
-  {
-    section: 'Admin',
-    items: [
-      { label: 'Social Manager', href: '/social', icon: Share2, admin: true },
-    ],
-  },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const isSocialActive    = SOCIAL_HREFS.includes(pathname)
-  const isMarketingActive = MARKETING_HREFS.includes(pathname)
+  const isSocialActive = SOCIAL_HREFS.includes(pathname)
 
   const SETTINGS_HREFS = ['/email-preview', '/settings/rules', '/settings/demo']
   const isSettingsActive = SETTINGS_HREFS.includes(pathname) || pathname === '/settings'
 
-  const [socialOpen,    setSocialOpen]    = useState(isSocialActive)
-  const [marketingOpen, setMarketingOpen] = useState(isMarketingActive)
-  const [settingsOpen,  setSettingsOpen]  = useState(isSettingsActive)
+  const [socialOpen,   setSocialOpen]   = useState(isSocialActive)
+  const [settingsOpen, setSettingsOpen] = useState(isSettingsActive)
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#0a0a0a] border-r border-[#222]">
@@ -159,43 +151,28 @@ export default function Sidebar() {
                   {pathname === '/social' && <ChevronRight className="h-3 w-3 opacity-60" />}
                 </Link>
 
-                {/* Marketing Manager nested toggle */}
-                <button
-                  onClick={() => setMarketingOpen(v => !v)}
-                  className={`w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    isMarketingActive
-                      ? 'text-orange-400'
-                      : 'text-zinc-500 hover:bg-orange-500/10 hover:text-orange-400'
-                  }`}
-                >
-                  <Briefcase className="h-3.5 w-3.5 shrink-0" />
-                  <span className="flex-1 text-left">Marketing Manager</span>
-                  <ChevronDown className={`h-3 w-3 transition-transform ${marketingOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Marketing sub-items */}
-                {marketingOpen && (
-                  <div className="ml-3 pl-3 border-l border-zinc-700 space-y-0.5 mt-0.5">
-                    {MARKETING_SUB.map(({ label, href, icon: Icon }) => {
-                      const active = pathname === href
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                            active
-                              ? 'bg-orange-500 text-white'
-                              : 'text-zinc-500 hover:bg-orange-500/10 hover:text-orange-400'
-                          }`}
-                        >
-                          <Icon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="flex-1">{label}</span>
-                          {active && <ChevronRight className="h-3 w-3 opacity-60" />}
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
+                {/* Marketing Manager — always visible when Social is open */}
+                <p className="px-3 pt-2 pb-1 text-xs font-semibold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <Briefcase className="h-3 w-3" /> Marketing
+                </p>
+                {MARKETING_SUB.map(({ label, href, icon: Icon }) => {
+                  const active = pathname === href
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                        active
+                          ? 'bg-orange-500 text-white'
+                          : 'text-zinc-500 hover:bg-orange-500/10 hover:text-orange-400'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1">{label}</span>
+                      {active && <ChevronRight className="h-3 w-3 opacity-60" />}
+                    </Link>
+                  )
+                })}
 
               </div>
             )}
