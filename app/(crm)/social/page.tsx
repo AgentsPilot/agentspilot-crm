@@ -1924,7 +1924,7 @@ export default function SocialPage() {
                   {/* Canva AI */}
                   <button type="button" onClick={() => {
                     if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
-                    window.open('https://www.canva.com/create/ai-images/', '_blank')
+                    window.open('https://www.canva.com/apps/text-to-image', '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
