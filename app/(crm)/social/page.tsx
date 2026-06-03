@@ -1904,7 +1904,7 @@ export default function SocialPage() {
                     onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
                     placeholder="Describe the image you want Claude or another AI to generate for this template…"
                     className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
-                  <p className="text-xs text-slate-400">Click &quot;AI Generate&quot; to copy this prompt and open Microsoft Designer (free DALL-E 3). Paste → generate → download → upload back here.</p>
+                  <p className="text-xs text-slate-400">Click a button to copy prompt + open the tool. Paste → generate → download → upload back here.</p>
                 </div>
 
                 {/* Preview */}
@@ -1921,20 +1921,23 @@ export default function SocialPage() {
 
                 {/* Design tool buttons */}
                 <div className="grid grid-cols-2 gap-2">
-                  {/* Pick from Canva */}
-                  <button type="button" onClick={openCanvaPicker}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
-                    Pick from Canva
-                  </button>
-                  {/* Generate with Microsoft Designer (free, DALL-E 3) */}
+                  {/* Canva AI */}
                   <button type="button" onClick={() => {
                     if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
-                    window.open('https://designer.microsoft.com/image-creator', '_blank')
+                    window.open('https://www.canva.com/create/ai-images/', '_blank')
                   }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#0078d4] text-[#0078d4] hover:bg-[#0078d4]/5 transition-colors">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="#0078d4"><rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/><rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/></svg>
-                    AI Generate (free)
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+                    Canva AI
+                  </button>
+                  {/* Ideogram */}
+                  <button type="button" onClick={() => {
+                    if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
+                    window.open('https://ideogram.ai/t/generate', '_blank')
+                  }}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a]/5 transition-colors">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#16a34a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                    Ideogram
                   </button>
                 </div>
 
