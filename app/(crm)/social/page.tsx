@@ -1899,12 +1899,21 @@ export default function SocialPage() {
                   </div>
                 )}
 
-                {/* Pick from Canva */}
-                <button type="button" onClick={openCanvaPicker}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-[#7c3aed]"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z"/></svg>
-                  Pick from Canva
-                </button>
+                {/* Design tool buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Pick from Canva */}
+                  <button type="button" onClick={openCanvaPicker}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+                    Pick from Canva
+                  </button>
+                  {/* Create with Claude Design */}
+                  <a href="https://claude.ai/design" target="_blank" rel="noreferrer"
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#d97706] text-[#d97706] hover:bg-[#d97706]/5 transition-colors">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#d97706" strokeWidth="2"><polygon points="4,2 20,12 4,22"/></svg>
+                    Claude Design
+                  </a>
+                </div>
 
                 {/* Upload or URL */}
                 <div className="flex flex-col gap-1">
