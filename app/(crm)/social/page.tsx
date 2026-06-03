@@ -242,6 +242,7 @@ export default function SocialPage() {
   })
   const [designUploading, setDesignUploading] = useState(false)
   const [cardDesignUploading, setCardDesignUploading] = useState<string | null>(null) // template title being uploaded
+  const [templateFields, setTemplateFields] = useState<Set<string>>(new Set())
   const [showCanvaPicker, setShowCanvaPicker] = useState(false)
   const [canvaDesigns, setCanvaDesigns] = useState<{ id: string; title: string; thumbnail: string; edit_url: string }[]>([])
   const [canvaSearchQuery, setCanvaSearchQuery] = useState('')
@@ -465,6 +466,7 @@ export default function SocialPage() {
     })
     setSelectedTemplate(t.collateral)
     setSelectedDesign({ url: (t as ActiveTemplate).design_preview_url, design_url: (t as ActiveTemplate).design_url })
+    setTemplateFields(new Set(['collateral', 'platforms', 'background', 'media_type', 'cta', 'caption']))
   }
 
   async function savePost(e: React.FormEvent) {
@@ -1429,105 +1431,42 @@ export default function SocialPage() {
             {/* Post form */}
             <div className="lg:col-span-2">
               <div className="rounded-xl border border-gray-200 bg-white p-6">
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-slate-900">
                     {editingPost ? '✏️ Edit Post' : '✨ Create New Post'}
                   </h3>
                   {editingPost && (
-                    <button onClick={() => { setEditingPost(null); setForm(emptyForm); setSelectedTemplate(null) }}
+                    <button onClick={() => { setEditingPost(null); setForm(emptyForm); setSelectedTemplate(null); setTemplateFields(new Set()) }}
                       className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
                       <X className="h-3.5 w-3.5" /> Cancel edit
                     </button>
                   )}
                 </div>
-                <form onSubmit={savePost} data-post-form className="space-y-4">
+                <form onSubmit={savePost} data-post-form className="space-y-3">
+
+                  {/* ── Design image ── */}
+                  {selectedDesign?.url && (
+                    <div className="relative w-full h-40 rounded-xl overflow-hidden border border-orange-100 bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={selectedDesign.url} alt="Design" className="w-full h-full object-cover" />
+                      {selectedDesign.design_url && (
+                        <a href={selectedDesign.design_url} target="_blank" rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="absolute bottom-2 right-2 bg-white/90 rounded px-2 py-1 text-xs font-medium text-blue-600 flex items-center gap-1 shadow-sm hover:bg-white">
+                          <ExternalLink className="h-3 w-3" /> Edit in Canva
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Primary fields: Title, Date, Status ── */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-500">Post Title <span className="text-red-500">*</span></label>
+                    <input required value={form.collateral} onChange={e => { setForm(f => ({ ...f, collateral: e.target.value })); setTemplateFields(s => { const n = new Set(s); n.delete('collateral'); return n }) }}
+                      placeholder="e.g. Teaser Post #1"
+                      className={`${inputCls} ${templateFields.has('collateral') ? 'bg-orange-50 border-orange-200' : ''}`} />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Post Title / Collateral <span className="text-red-500">*</span></label>
-                      <input required value={form.collateral} onChange={e => setForm(f => ({ ...f, collateral: e.target.value }))}
-                        placeholder="e.g. Teaser Post #1" className={inputCls} />
-                    </div>
-
-                    {/* Campaign selector */}
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Campaign <span className="text-slate-400">(optional)</span></label>
-                      <select
-                        value={form.campaign_id}
-                        onChange={e => {
-                          const newCampaignId = e.target.value
-                          const LANDING = 'https://agentspilot-marketing.vercel.app/signup'
-
-                          // Build new UTM link for the newly selected campaign
-                          const buildUtm = (campId: string) => {
-                            const camp = campaigns.find(c => c.id === campId)
-                            if (!camp?.utm_source) {
-                              const src = form.platforms[0]?.toLowerCase().replace(/\s/g, '') ?? 'social'
-                              const slug = form.collateral.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'post'
-                              return `${LANDING}?utm_source=${src}&utm_medium=social&utm_campaign=${slug}`
-                            }
-                            const p = new URLSearchParams()
-                            p.set('utm_source', camp.utm_source)
-                            if (camp.utm_medium)   p.set('utm_medium',   camp.utm_medium)
-                            if (camp.utm_campaign) p.set('utm_campaign', camp.utm_campaign)
-                            return `${LANDING}?${p.toString()}`
-                          }
-
-                          // Strip any previously appended UTM link from caption
-                          const stripUtm = (caption: string) =>
-                            caption.replace(/\n+https?:\/\/[^\s]+utm_[^\s]*/g, '').trimEnd()
-
-                          setForm(f => {
-                            const cleanCaption = stripUtm(f.caption)
-                            const newCaption = newCampaignId
-                              ? `${cleanCaption}\n${buildUtm(newCampaignId)}`
-                              : cleanCaption
-                            return { ...f, campaign_id: newCampaignId, caption: newCaption }
-                          })
-                        }}
-                        className={inputCls}>
-                        <option value="">— No campaign —</option>
-                        {campaigns.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} {c.status !== 'active' ? `(${c.status})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Platform checkboxes */}
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Platforms</label>
-                      <div className="flex flex-wrap gap-2">
-                        {ALL_PLATFORMS.map(pl => (
-                          <label key={pl} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-medium transition-all ${
-                            form.platforms.includes(pl)
-                              ? `${platformColor[pl]} text-white border-transparent`
-                              : 'border-gray-200 text-slate-600 hover:border-gray-300'
-                          }`}>
-                            <input type="checkbox" className="hidden"
-                              checked={form.platforms.includes(pl)}
-                              onChange={e => setForm(f => ({
-                                ...f,
-                                platforms: e.target.checked
-                                  ? [...f.platforms, pl]
-                                  : f.platforms.filter(p => p !== pl)
-                              }))} />
-                            {pl}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">Media Type</label>
-                      <input value={form.media_type} onChange={e => setForm(f => ({ ...f, media_type: e.target.value }))}
-                        placeholder="e.g. Short Video, Static Image" className={inputCls} />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">CTA</label>
-                      <input value={form.cta} onChange={e => setForm(f => ({ ...f, cta: e.target.value }))}
-                        placeholder="e.g. 👉 Follow to see more" className={inputCls} />
-                    </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-xs font-medium text-slate-500">Schedule Date</label>
                       <input type="date" value={form.scheduled_date} onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))}
@@ -1541,6 +1480,85 @@ export default function SocialPage() {
                         <option value="scheduled">Scheduled</option>
                         <option value="published">Published</option>
                       </select>
+                    </div>
+                  </div>
+
+                  {/* ── Campaign ── */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <label className="text-xs font-medium text-slate-500">Campaign <span className="text-slate-400">(optional)</span></label>
+                      <select
+                        value={form.campaign_id}
+                        onChange={e => {
+                          const newCampaignId = e.target.value
+                          const LANDING = 'https://agentspilot-marketing.vercel.app/signup'
+                          const buildUtm = (campId: string) => {
+                            const camp = campaigns.find(c => c.id === campId)
+                            if (!camp?.utm_source) {
+                              const src = form.platforms[0]?.toLowerCase().replace(/\s/g, '') ?? 'social'
+                              const slug = form.collateral.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'post'
+                              return `${LANDING}?utm_source=${src}&utm_medium=social&utm_campaign=${slug}`
+                            }
+                            const p = new URLSearchParams()
+                            p.set('utm_source', camp.utm_source)
+                            if (camp.utm_medium)   p.set('utm_medium',   camp.utm_medium)
+                            if (camp.utm_campaign) p.set('utm_campaign', camp.utm_campaign)
+                            return `${LANDING}?${p.toString()}`
+                          }
+                          const stripUtm = (caption: string) =>
+                            caption.replace(/\n+https?:\/\/[^\s]+utm_[^\s]*/g, '').trimEnd()
+                          setForm(f => {
+                            const cleanCaption = stripUtm(f.caption)
+                            const newCaption = newCampaignId ? `${cleanCaption}\n${buildUtm(newCampaignId)}` : cleanCaption
+                            return { ...f, campaign_id: newCampaignId, caption: newCaption }
+                          })
+                        }}
+                        className={inputCls}>
+                        <option value="">— No campaign —</option>
+                        {campaigns.map(c => (
+                          <option key={c.id} value={c.id}>{c.name} {c.status !== 'active' ? `(${c.status})` : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* ── Template-filled fields ── */}
+                  {templateFields.size > 0 && (
+                    <div className="text-xs text-orange-600 flex items-center gap-1.5 px-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-orange-400 inline-block" />
+                      Fields highlighted in orange were pre-filled from the template — edit freely
+                    </div>
+                  )}
+
+                  {/* Platforms */}
+                  <div className={`flex flex-col gap-1 rounded-lg p-2 -mx-2 ${templateFields.has('platforms') ? 'bg-orange-50' : ''}`}>
+                    <label className="text-xs font-medium text-slate-500">Platforms</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_PLATFORMS.map(pl => (
+                        <label key={pl} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-medium transition-all ${
+                          form.platforms.includes(pl)
+                            ? `${platformColor[pl]} text-white border-transparent`
+                            : 'border-gray-200 text-slate-600 hover:border-gray-300'
+                        }`}>
+                          <input type="checkbox" className="hidden"
+                            checked={form.platforms.includes(pl)}
+                            onChange={e => { setForm(f => ({ ...f, platforms: e.target.checked ? [...f.platforms, pl] : f.platforms.filter(p => p !== pl) })); setTemplateFields(s => { const n = new Set(s); n.delete('platforms'); return n }) }} />
+                          {pl}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className={`flex flex-col gap-1 rounded-lg p-1 -mx-1 ${templateFields.has('media_type') ? 'bg-orange-50' : ''}`}>
+                      <label className="text-xs font-medium text-slate-500">Media Type</label>
+                      <input value={form.media_type} onChange={e => { setForm(f => ({ ...f, media_type: e.target.value })); setTemplateFields(s => { const n = new Set(s); n.delete('media_type'); return n }) }}
+                        placeholder="e.g. Short Video, Static Image" className={inputCls} />
+                    </div>
+                    <div className={`flex flex-col gap-1 rounded-lg p-1 -mx-1 ${templateFields.has('cta') ? 'bg-orange-50' : ''}`}>
+                      <label className="text-xs font-medium text-slate-500">CTA</label>
+                      <input value={form.cta} onChange={e => { setForm(f => ({ ...f, cta: e.target.value })); setTemplateFields(s => { const n = new Set(s); n.delete('cta'); return n }) }}
+                        placeholder="e.g. 👉 Follow to see more" className={inputCls} />
                     </div>
                   </div>
 
@@ -1560,93 +1578,48 @@ export default function SocialPage() {
                     )
                   })()}
 
-                  <div className="flex flex-col gap-1">
+                  {/* Background / Messaging */}
+                  <div className={`flex flex-col gap-1 rounded-lg p-1 -mx-1 ${templateFields.has('background') ? 'bg-orange-50' : ''}`}>
                     <label className="text-xs font-medium text-slate-500">Background / Messaging</label>
-                    <textarea rows={3} value={form.background} onChange={e => setForm(f => ({ ...f, background: e.target.value }))}
+                    <textarea rows={2} value={form.background} onChange={e => { setForm(f => ({ ...f, background: e.target.value })); setTemplateFields(s => { const n = new Set(s); n.delete('background'); return n }) }}
                       placeholder="The key message and context for this post..."
                       className={`${inputCls} resize-none`} />
                   </div>
 
-                  {/* ── AI Toggle ─────────────────────────────────────────── */}
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-orange-400" />
-                      <span className="text-sm font-medium text-slate-700">Generate caption with AI</span>
-                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Claude</span>
+                  {/* Caption */}
+                  <div className={`flex flex-col gap-1 rounded-lg p-1 -mx-1 ${templateFields.has('caption') ? 'bg-orange-50' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-slate-500">Post Caption <span className="text-red-500">*</span></label>
+                      <button type="button" onClick={() => setUseAI(v => !v)}
+                        className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600">
+                        <Sparkles className="h-3 w-3" />
+                        {useAI ? 'Hide AI' : 'Generate with AI'}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setUseAI(v => !v)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${useAI ? 'bg-orange-500' : 'bg-gray-200'}`}>
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${useAI ? 'translate-x-4' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-
-                  {/* ── AI Generator ──────────────────────────────────────── */}
-                  {useAI && <div className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-orange-500" />
-                      <h4 className="text-sm font-semibold text-slate-800">Generate Caption with AI</h4>
-                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">Claude</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-slate-500">What should this post be about?</label>
-                      <textarea
-                        rows={2}
-                        value={aiBrief}
-                        onChange={e => setAiBrief(e.target.value)}
-                        placeholder="e.g. Announcing our new AI lead scoring feature that cuts pipeline review time in half"
-                        className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700 resize-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-xs font-medium text-slate-500">Platform</label>
-                        <select
-                          value={aiPlatform}
-                          onChange={e => setAiPlatform(e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700">
-                          {['LinkedIn', 'Facebook', 'Instagram', 'TikTok', 'Website'].map(p => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                        </select>
+                    {useAI && (
+                      <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-2 mb-1">
+                        <textarea rows={2} value={aiBrief} onChange={e => setAiBrief(e.target.value)}
+                          placeholder="Brief: what should this post be about?"
+                          className="w-full px-3 py-2 text-xs border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <select value={aiPlatform} onChange={e => setAiPlatform(e.target.value)}
+                            className="px-2 py-1.5 text-xs border border-orange-200 rounded-lg bg-white focus:outline-none">
+                            {['LinkedIn', 'Facebook', 'Instagram', 'TikTok', 'Website'].map(p => <option key={p}>{p}</option>)}
+                          </select>
+                          <select value={aiTone} onChange={e => setAiTone(e.target.value)}
+                            className="px-2 py-1.5 text-xs border border-orange-200 rounded-lg bg-white focus:outline-none">
+                            {['Professional', 'Casual', 'Bold', 'Inspirational'].map(t => <option key={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+                        <button type="button" onClick={generateWithAI} disabled={aiLoading || !aiBrief.trim()}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                          {aiLoading ? <><RefreshCw className="h-3 w-3 animate-spin" /> Generating…</> : <><Sparkles className="h-3 w-3" /> Generate Caption & CTA</>}
+                        </button>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-xs font-medium text-slate-500">Tone</label>
-                        <select
-                          value={aiTone}
-                          onChange={e => setAiTone(e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-orange-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-700">
-                          {['Professional', 'Casual', 'Bold', 'Inspirational'].map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    {aiError && (
-                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{aiError}</p>
                     )}
-                    <button
-                      type="button"
-                      onClick={generateWithAI}
-                      disabled={aiLoading || !aiBrief.trim()}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 transition-colors w-full justify-center">
-                      {aiLoading
-                        ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Generating…</>
-                        : <><Sparkles className="h-3.5 w-3.5" /> Generate Caption &amp; CTA</>
-                      }
-                    </button>
-                    {form.caption && !aiLoading && (
-                      <p className="text-xs text-emerald-600 flex items-center gap-1">
-                        <Check className="h-3 w-3" /> Caption applied below — edit as needed
-                      </p>
-                    )}
-                  </div>}
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-slate-500">Post Caption <span className="text-red-500">*</span></label>
-                    <textarea required rows={5} value={form.caption} onChange={e => setForm(f => ({ ...f, caption: e.target.value }))}
-                      placeholder="Write the final caption text here, or generate with AI above..."
+                    <textarea required rows={5} value={form.caption} onChange={e => { setForm(f => ({ ...f, caption: e.target.value })); setTemplateFields(s => { const n = new Set(s); n.delete('caption'); return n }) }}
+                      placeholder="Write or generate caption…"
                       className={`${inputCls} resize-none font-mono text-xs`} />
                     <p className="text-xs text-slate-400">{form.caption.length} chars</p>
                   </div>
