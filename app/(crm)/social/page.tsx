@@ -1976,7 +1976,7 @@ export default function SocialPage() {
                   {/* Canva AI */}
                   <button type="button" onClick={() => {
                     navigator.clipboard.writeText(buildEnrichedPrompt())
-                    window.open('https://www.canva.com/apps/text-to-image', '_blank')
+                    window.open('https://www.canva.com/apps/text-to-image', 'canva-ai')
                   }}
                     className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
@@ -1985,7 +1985,7 @@ export default function SocialPage() {
                   {/* Ideogram */}
                   <button type="button" onClick={() => {
                     navigator.clipboard.writeText(buildEnrichedPrompt())
-                    window.open('https://ideogram.ai/t/generate', '_blank')
+                    window.open('https://ideogram.ai/t/generate', 'ideogram-ai')
                   }}
                     className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a]/5 transition-colors">
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#16a34a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
