@@ -41,6 +41,7 @@ type PostTemplate = {
   active: boolean
   design_url: string | null
   design_preview_url: string | null
+  design_prompt: string | null
 }
 
 type TabId = 'calendar' | 'platform' | 'create' | 'tracker'
@@ -236,7 +237,7 @@ export default function SocialPage() {
   const [editingTemplate, setEditingTemplate] = useState<PostTemplate | null>(null)
   const [templateForm, setTemplateForm] = useState({
     title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: 0,
-    design_url: '', design_preview_url: '',
+    design_url: '', design_preview_url: '', design_prompt: '',
   })
   const [designUploading, setDesignUploading] = useState(false)
   const [cardDesignUploading, setCardDesignUploading] = useState<string | null>(null) // template title being uploaded
@@ -258,7 +259,7 @@ export default function SocialPage() {
     ? dbTemplates.filter(t => t.active).map(t => ({
         collateral: t.title, platforms: t.platforms, media_type: t.media_type,
         background: t.background, cta: t.cta, caption: t.caption,
-        design_url: t.design_url, design_preview_url: t.design_preview_url,
+        design_url: t.design_url, design_preview_url: t.design_preview_url, design_prompt: t.design_prompt,
       }))
     : FALLBACK_TEMPLATES
 
@@ -548,13 +549,13 @@ export default function SocialPage() {
   // ── Template CRUD ────────────────────────────────────────────────────────
   function openNewTemplate() {
     setEditingTemplate(null)
-    setTemplateForm({ title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: dbTemplates.length + 1, design_url: '', design_preview_url: '' })
+    setTemplateForm({ title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: dbTemplates.length + 1, design_url: '', design_preview_url: '', design_prompt: '' })
     setShowTemplateForm(true)
   }
 
   function openEditTemplate(t: PostTemplate) {
     setEditingTemplate(t)
-    setTemplateForm({ title: t.title, platforms: t.platforms, media_type: t.media_type, background: t.background, cta: t.cta, caption: t.caption, sort_order: t.sort_order, design_url: t.design_url ?? '', design_preview_url: t.design_preview_url ?? '' })
+    setTemplateForm({ title: t.title, platforms: t.platforms, media_type: t.media_type, background: t.background, cta: t.cta, caption: t.caption, sort_order: t.sort_order, design_url: t.design_url ?? '', design_preview_url: t.design_preview_url ?? '', design_prompt: t.design_prompt ?? '' })
     setShowTemplateForm(true)
   }
 
@@ -1887,6 +1888,24 @@ export default function SocialPage() {
               <div className="border-t border-gray-100 pt-3 space-y-3">
                 <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5 text-orange-400" /> Design Template</p>
 
+                {/* AI Prompt */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-slate-500">AI Image Prompt</label>
+                    {templateForm.design_prompt && (
+                      <button type="button" onClick={() => navigator.clipboard.writeText(templateForm.design_prompt)}
+                        className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                        <Copy className="h-3 w-3" /> Copy prompt
+                      </button>
+                    )}
+                  </div>
+                  <textarea rows={3} value={templateForm.design_prompt}
+                    onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
+                    placeholder="Describe the image you want Claude or another AI to generate for this template…"
+                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
+                  <p className="text-xs text-slate-400">Click "Claude Design" below to copy this prompt and open Claude&apos;s image tool.</p>
+                </div>
+
                 {/* Preview */}
                 {templateForm.design_preview_url && (
                   <div className="relative rounded-lg overflow-hidden border border-gray-200 h-32">
@@ -1908,11 +1927,14 @@ export default function SocialPage() {
                     Pick from Canva
                   </button>
                   {/* Create with Claude Design */}
-                  <a href="https://claude.ai/design" target="_blank" rel="noreferrer"
+                  <button type="button" onClick={() => {
+                    if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
+                    window.open('https://claude.ai/design', '_blank')
+                  }}
                     className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#d97706] text-[#d97706] hover:bg-[#d97706]/5 transition-colors">
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#d97706" strokeWidth="2"><polygon points="4,2 20,12 4,22"/></svg>
                     Claude Design
-                  </a>
+                  </button>
                 </div>
 
                 {/* Upload or URL */}
