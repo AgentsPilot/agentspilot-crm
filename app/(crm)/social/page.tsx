@@ -586,6 +586,17 @@ export default function SocialPage() {
     fetchTemplates()
   }
 
+  function buildEnrichedPrompt() {
+    const parts: string[] = []
+    if (templateForm.design_prompt) parts.push(templateForm.design_prompt)
+    if (templateForm.background) parts.push(`Key message to incorporate: "${templateForm.background}"`)
+    if (templateForm.cta) parts.push(`CTA text on image: "${templateForm.cta}"`)
+    if (templateForm.caption) parts.push(`Post caption context: "${templateForm.caption.slice(0, 120)}…"`)
+    if (templateForm.platforms) parts.push(`Optimized for: ${templateForm.platforms}`)
+    parts.push('Brand: AgentsPilot CRM. Colors: dark background, orange accent (#f97316). Square 1:1 format.')
+    return parts.join('\n\n')
+  }
+
   async function openCanvaPicker() {
     if (canvaDesigns.length === 0) {
       const res = await fetch('/api/canva/designs')
@@ -1894,9 +1905,9 @@ export default function SocialPage() {
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium text-slate-500">AI Image Prompt</label>
                     {templateForm.design_prompt && (
-                      <button type="button" onClick={() => navigator.clipboard.writeText(templateForm.design_prompt)}
+                      <button type="button" onClick={() => navigator.clipboard.writeText(buildEnrichedPrompt())}
                         className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
-                        <Copy className="h-3 w-3" /> Copy prompt
+                        <Copy className="h-3 w-3" /> Copy full prompt
                       </button>
                     )}
                   </div>
@@ -1904,7 +1915,7 @@ export default function SocialPage() {
                     onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
                     placeholder="Describe the image you want Claude or another AI to generate for this template…"
                     className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
-                  <p className="text-xs text-slate-400">Click a button to copy prompt + open the tool. Paste → generate → download → upload back here.</p>
+                  <p className="text-xs text-slate-400">Buttons below copy the full prompt (base style + CTA + messaging + brand) and open the tool. Paste → generate → download → upload.</p>
                 </div>
 
                 {/* Preview */}
@@ -1923,7 +1934,7 @@ export default function SocialPage() {
                 <div className="grid grid-cols-2 gap-2">
                   {/* Canva AI */}
                   <button type="button" onClick={() => {
-                    if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
+                    navigator.clipboard.writeText(buildEnrichedPrompt())
                     window.open('https://www.canva.com/apps/text-to-image', '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
@@ -1932,7 +1943,7 @@ export default function SocialPage() {
                   </button>
                   {/* Ideogram */}
                   <button type="button" onClick={() => {
-                    if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
+                    navigator.clipboard.writeText(buildEnrichedPrompt())
                     window.open('https://ideogram.ai/t/generate', '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a]/5 transition-colors">
