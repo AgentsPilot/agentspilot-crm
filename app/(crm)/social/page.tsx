@@ -254,6 +254,7 @@ export default function SocialPage() {
   type ActiveTemplate = typeof FALLBACK_TEMPLATES[0] & {
     design_url?: string | null
     design_preview_url?: string | null
+    design_prompt?: string | null
   }
   const activeTemplates: ActiveTemplate[] = dbTemplates.length > 0
     ? dbTemplates.filter(t => t.active).map(t => ({
