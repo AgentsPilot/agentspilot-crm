@@ -1904,7 +1904,7 @@ export default function SocialPage() {
                     onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
                     placeholder="Describe the image you want Claude or another AI to generate for this template…"
                     className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
-                  <p className="text-xs text-slate-400">Click "Claude Design" below to copy this prompt and open Claude&apos;s image tool.</p>
+                  <p className="text-xs text-slate-400">Click &quot;AI Generate&quot; to copy this prompt and open Microsoft Designer (free DALL-E 3). Paste → generate → download → upload back here.</p>
                 </div>
 
                 {/* Preview */}
@@ -1927,14 +1927,14 @@ export default function SocialPage() {
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
                     Pick from Canva
                   </button>
-                  {/* Create with Claude Design */}
+                  {/* Generate with Microsoft Designer (free, DALL-E 3) */}
                   <button type="button" onClick={() => {
                     if (templateForm.design_prompt) navigator.clipboard.writeText(templateForm.design_prompt)
-                    window.open('https://claude.ai/design', '_blank')
+                    window.open('https://designer.microsoft.com/image-creator', '_blank')
                   }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#d97706] text-[#d97706] hover:bg-[#d97706]/5 transition-colors">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#d97706" strokeWidth="2"><polygon points="4,2 20,12 4,22"/></svg>
-                    Claude Design
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#0078d4] text-[#0078d4] hover:bg-[#0078d4]/5 transition-colors">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="#0078d4"><rect x="2" y="2" width="9" height="9"/><rect x="13" y="2" width="9" height="9"/><rect x="2" y="13" width="9" height="9"/><rect x="13" y="13" width="9" height="9"/></svg>
+                    AI Generate (free)
                   </button>
                 </div>
 
