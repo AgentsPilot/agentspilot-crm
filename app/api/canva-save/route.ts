@@ -7,13 +7,12 @@ const supabase = createClient(
 )
 
 // POST /api/canva-save
-// Body: { canva_url: string, template_title: string }
-// Downloads the Canva export, uploads to Supabase storage, updates template
+// Body: { canva_url: string, template_id?: string, template_title?: string }
 export async function POST(req: NextRequest) {
   try {
-    const { canva_url, template_title } = await req.json()
-    if (!canva_url || !template_title) {
-      return NextResponse.json({ error: 'canva_url and template_title required' }, { status: 400 })
+    const { canva_url, template_id, template_title } = await req.json()
+    if (!canva_url || (!template_id && !template_title)) {
+      return NextResponse.json({ error: 'canva_url and template_id or template_title required' }, { status: 400 })
     }
 
     // Download image from Canva
@@ -34,11 +33,11 @@ export async function POST(req: NextRequest) {
 
     const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
 
-    // Update template in DB
-    const { error: updateError } = await supabase
-      .from('post_templates')
-      .update({ design_preview_url: publicUrl })
-      .eq('title', template_title)
+    // Update template — prefer ID over title to avoid encoding issues with special chars
+    const query = supabase.from('post_templates').update({ design_preview_url: publicUrl })
+    const { error: updateError } = template_id
+      ? await query.eq('id', template_id)
+      : await query.eq('title', template_title)
 
     if (updateError) return NextResponse.json({ error: 'DB update failed: ' + updateError.message }, { status: 500 })
 
