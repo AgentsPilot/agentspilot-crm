@@ -243,6 +243,7 @@ export default function SocialPage() {
   const [designUploading, setDesignUploading] = useState(false)
   const [cardDesignUploading, setCardDesignUploading] = useState<string | null>(null) // template title being uploaded
   const [templateFields, setTemplateFields] = useState<Set<string>>(new Set())
+  const [fluxGenerating, setFluxGenerating] = useState(false)
   const [showCanvaPicker, setShowCanvaPicker] = useState(false)
   const [canvaDesigns, setCanvaDesigns] = useState<{ id: string; title: string; thumbnail: string; edit_url: string }[]>([])
   const [canvaSearchQuery, setCanvaSearchQuery] = useState('')
@@ -601,6 +602,29 @@ export default function SocialPage() {
     if (templateForm.platforms) parts.push(`Optimized for: ${templateForm.platforms}`)
     parts.push('Brand: AgentsPilot CRM. Colors: dark background, orange accent (#f97316). Square 1:1 format. Place the brand logo in the top-left corner of the image.')
     return parts.join('\n\n')
+  }
+
+  async function generateWithFlux() {
+    const prompt = buildEnrichedPrompt()
+    if (!prompt) return
+    setFluxGenerating(true)
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      const json = await res.json()
+      if (json.error) { alert('Generation failed: ' + json.error); return }
+      // Convert base64 to File and upload to Supabase storage
+      const base64 = json.image.split(',')[1]
+      const byteArr = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+      const file = new File([byteArr], `flux-${Date.now()}.jpg`, { type: json.contentType })
+      const url = await uploadDesignImage(file)
+      if (url) setTemplateForm(f => ({ ...f, design_preview_url: url }))
+    } finally {
+      setFluxGenerating(false)
+    }
   }
 
   async function openCanvaPicker() {
@@ -1947,6 +1971,18 @@ export default function SocialPage() {
                 )}
 
                 {/* Design tool buttons */}
+                {/* Generate with Flux (free, fully automated) */}
+                <button type="button" onClick={generateWithFlux} disabled={fluxGenerating}
+                  className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors ${
+                    fluxGenerating
+                      ? 'bg-orange-100 text-orange-400 cursor-not-allowed'
+                      : 'bg-orange-500 text-white hover:bg-orange-600'
+                  }`}>
+                  {fluxGenerating
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating image…</>
+                    : <><Sparkles className="h-4 w-4" /> Generate with Flux (free)</>
+                  }
+                </button>
                 <div className="grid grid-cols-2 gap-2">
                   {/* Canva AI */}
                   <button type="button" onClick={() => {
