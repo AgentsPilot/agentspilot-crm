@@ -1452,13 +1452,14 @@ export default function SocialPage() {
                           <div className="flex items-start justify-between gap-1">
                             <p className="text-xs font-semibold text-slate-800 flex-1">{t.collateral}</p>
                             {dbTemplates.find(d => d.title === t.collateral) && (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={e => { e.stopPropagation(); queueCanvaJob(t.collateral) }}
-                                  className="shrink-0 text-slate-300 hover:text-[#7c3aed] transition-colors"
+                                  className="text-xs font-medium text-[#7c3aed] hover:underline flex items-center gap-0.5"
                                   title="Queue for Canva finalization">
-                                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+                                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+                                  Canva
                                 </button>
                                 <button
                                   type="button"
