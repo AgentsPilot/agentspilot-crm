@@ -982,8 +982,8 @@ export default function SocialPage() {
                 <div className="border-b border-orange-100 px-6 py-3 bg-orange-50/50">
                   <p className="text-xs font-semibold text-slate-600 mb-2">Click a template to load it into New Post</p>
                   <div className="flex gap-2 overflow-x-auto pb-1">
-                    {activeTemplates.map(t => (
-                      <button key={t.collateral}
+                    {activeTemplates.map((t, i) => (
+                      <button key={`${t.collateral}-${i}`}
                         onClick={() => { applyTemplate(t); setActiveTab('create'); setShowTemplatesPanel(false) }}
                         className="shrink-0 flex flex-col gap-0.5 px-3 py-2 rounded-lg border border-orange-200 bg-white hover:border-orange-400 hover:bg-orange-50 transition-colors text-left min-w-[150px]">
                         <span className="text-xs font-semibold text-slate-800 truncate w-full">{t.collateral}</span>
@@ -1394,10 +1394,10 @@ export default function SocialPage() {
                 )}
 
                 <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
-                  {activeTemplates.map(t => {
+                  {activeTemplates.map((t, i) => {
                     const tDesign = t as ActiveTemplate
                     return (
-                      <div key={t.collateral}
+                      <div key={`${t.collateral}-${i}`}
                         onClick={() => applyTemplate(t)}
                         className={`rounded-lg border cursor-pointer transition-all overflow-hidden ${
                           selectedTemplate === t.collateral
@@ -1745,9 +1745,9 @@ export default function SocialPage() {
             {/* Template list */}
             <div className="px-6 py-4 max-h-[60vh] overflow-y-auto space-y-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Pick a template — saves instantly</p>
-              {activeTemplates.map(t => (
+              {activeTemplates.map((t, i) => (
                 <button
-                  key={t.collateral}
+                  key={`${t.collateral}-${i}`}
                   disabled={dayPickerSaving}
                   onClick={() => quickSchedule(t, dayPickerDate)}
                   className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-gray-200 hover:border-orange-400 hover:bg-orange-50/40 transition-all text-left disabled:opacity-50 group">
