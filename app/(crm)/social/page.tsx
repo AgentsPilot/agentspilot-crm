@@ -1931,7 +1931,7 @@ export default function SocialPage() {
                     onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
                     placeholder="Describe the image you want Claude or another AI to generate for this template…"
                     className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
-                  <p className="text-xs text-slate-400">Buttons below copy the full prompt (base style + CTA + messaging + brand) and open the tool. Paste → generate → download → upload.</p>
+                  <p className="text-xs text-slate-400">Clicking a button copies the full prompt to clipboard and opens the design tool. Paste the prompt to start designing.</p>
                 </div>
 
                 {/* Preview */}
@@ -1957,14 +1957,14 @@ export default function SocialPage() {
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
                     Canva AI
                   </button>
-                  {/* Ideogram */}
+                  {/* Claude Design */}
                   <button type="button" onClick={() => {
                     navigator.clipboard.writeText(buildEnrichedPrompt())
-                    window.open('https://ideogram.ai/t/generate', 'ideogram-ai')
+                    window.open('https://claude.ai/design/p/57c00f4a-b6b8-4232-8631-bc8507cc3840?file=AgentsPilot+Social+Post.html', 'claude-design')
                   }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a]/5 transition-colors">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#16a34a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                    Ideogram
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#d97706] text-[#d97706] hover:bg-[#d97706]/5 transition-colors">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#d97706" strokeWidth="2"><polygon points="4,2 20,12 4,22"/></svg>
+                    Claude Design
                   </button>
                 </div>
 
