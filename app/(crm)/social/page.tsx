@@ -1369,7 +1369,7 @@ export default function SocialPage() {
                   </div>
                 )}
 
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
                   {activeTemplates.map(t => {
                     const tDesign = t as ActiveTemplate
                     return (
