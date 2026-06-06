@@ -642,6 +642,13 @@ export default function SocialPage() {
     }
   }
 
+  async function queueCanvaJob(templateTitle: string) {
+    const dbT = dbTemplates.find(t => t.title === templateTitle)
+    if (!dbT) return
+    await supabase.from('canva_jobs').insert([{ template_id: dbT.id, title: templateTitle, status: 'pending' }])
+    alert(`✅ "${templateTitle}" queued for Canva finalization.\nTell Claude: "process pending Canva jobs"`)
+  }
+
   async function openCanvaPicker() {
     if (canvaDesigns.length === 0) {
       const res = await fetch('/api/canva/designs')
@@ -1445,13 +1452,22 @@ export default function SocialPage() {
                           <div className="flex items-start justify-between gap-1">
                             <p className="text-xs font-semibold text-slate-800 flex-1">{t.collateral}</p>
                             {dbTemplates.find(d => d.title === t.collateral) && (
-                              <button
-                                type="button"
-                                onClick={e => { e.stopPropagation(); openEditTemplate(dbTemplates.find(d => d.title === t.collateral)!) }}
-                                className="shrink-0 text-slate-300 hover:text-orange-500 transition-colors"
-                                title="Edit template">
-                                <Pencil className="h-3 w-3" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); queueCanvaJob(t.collateral) }}
+                                  className="shrink-0 text-slate-300 hover:text-[#7c3aed] transition-colors"
+                                  title="Queue for Canva finalization">
+                                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); openEditTemplate(dbTemplates.find(d => d.title === t.collateral)!) }}
+                                  className="shrink-0 text-slate-300 hover:text-orange-500 transition-colors"
+                                  title="Edit template">
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                              </div>
                             )}
                           </div>
                           <p className="text-xs text-slate-500 mt-0.5 truncate">{t.platforms}</p>
