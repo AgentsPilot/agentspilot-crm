@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Try models in order until one works
 const MODELS = [
-  'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
-  'https://api-inference.huggingface.co/models/stabilityai/sdxl-turbo',
-  'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
+  'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+  'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0',
+  'https://router.huggingface.co/hf-inference/models/runwayml/stable-diffusion-v1-5',
 ]
 
 export async function POST(req: NextRequest) {
