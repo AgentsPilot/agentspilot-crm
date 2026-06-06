@@ -309,12 +309,14 @@ export default function SocialPage() {
   }
 
   async function fetchTemplates() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('post_templates')
       .select('*')
       .eq('active', true)
       .order('sort_order', { ascending: true })
-    if (data && data.length > 0) setDbTemplates(data)
+      .limit(200)
+    if (error) console.error('fetchTemplates error:', error)
+    if (data) setDbTemplates(data)
   }
 
   useEffect(() => {
