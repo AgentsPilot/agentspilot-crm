@@ -629,7 +629,14 @@ export default function SocialPage() {
       const byteArr = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
       const file = new File([byteArr], `flux-${Date.now()}.jpg`, { type: json.contentType || 'image/jpeg' })
       const url = await uploadDesignImage(file)
-      if (url) setTemplateForm(f => ({ ...f, design_preview_url: url }))
+      if (url) {
+        setTemplateForm(f => ({ ...f, design_preview_url: url }))
+        // Auto-save to DB if editing an existing template
+        if (editingTemplate) {
+          await supabase.from('post_templates').update({ design_preview_url: url }).eq('id', editingTemplate.id)
+          fetchTemplates()
+        }
+      }
     } finally {
       setFluxGenerating(false)
     }
