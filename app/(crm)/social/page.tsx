@@ -314,7 +314,7 @@ export default function SocialPage() {
       .select('*')
       .eq('active', true)
       .order('sort_order', { ascending: true })
-      .limit(200)
+      .range(0, 199)
     if (error) console.error('fetchTemplates error:', error)
     if (data) setDbTemplates(data)
   }
