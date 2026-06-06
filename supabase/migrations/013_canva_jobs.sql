@@ -12,9 +12,12 @@ create table if not exists canva_jobs (
 );
 
 -- Allow anon/auth to insert and read
-create policy if not exists "Public canva_jobs access"
-  on canva_jobs for all
-  using (true)
-  with check (true);
-
 alter table canva_jobs enable row level security;
+
+do $$ begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'canva_jobs' and policyname = 'Public canva_jobs access'
+  ) then
+    create policy "Public canva_jobs access" on canva_jobs for all using (true) with check (true);
+  end if;
+end $$;
