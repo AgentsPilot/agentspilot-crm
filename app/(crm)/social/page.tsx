@@ -609,17 +609,25 @@ export default function SocialPage() {
     if (!prompt) return
     setFluxGenerating(true)
     try {
-      const res = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      })
-      const json = await res.json()
+      let json: { image?: string; contentType?: string; error?: string; loading?: boolean } = {}
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        })
+        json = await res.json().catch(() => ({ error: `HTTP ${res.status} — empty response` }))
+        if (json.loading) {
+          await new Promise(r => setTimeout(r, 20000)) // wait 20s for model to load
+          continue
+        }
+        break
+      }
       if (json.error) { alert('Generation failed: ' + json.error); return }
-      // Convert base64 to File and upload to Supabase storage
+      if (!json.image) { alert('No image returned. Try again.'); return }
       const base64 = json.image.split(',')[1]
       const byteArr = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
-      const file = new File([byteArr], `flux-${Date.now()}.jpg`, { type: json.contentType })
+      const file = new File([byteArr], `flux-${Date.now()}.jpg`, { type: json.contentType || 'image/jpeg' })
       const url = await uploadDesignImage(file)
       if (url) setTemplateForm(f => ({ ...f, design_preview_url: url }))
     } finally {
