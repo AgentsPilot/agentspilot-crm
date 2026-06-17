@@ -1,9 +1,28 @@
 'use client'
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check, Sparkles, RefreshCw, BookOpen, Bell, Link2, Copy, CheckCheck, ListChecks, ImageIcon, ExternalLink, Upload, Eye } from 'lucide-react'
+import { Plus, X, Loader2, Calendar, LayoutGrid, PenSquare, Globe, ChevronLeft, ChevronRight, Pencil, Check, Sparkles, RefreshCw, BookOpen, Bell, Link2, Copy, CheckCheck, ListChecks, ImageIcon, ExternalLink, Upload, Eye, Hash, Film, Trash2 } from 'lucide-react'
 import { PostTrackerTable } from '@/app/(crm)/post-tracker/page'
+import type { PostVideoProps } from '@/components/social/PostVideoComposition'
+import type { ProductDemoProps } from '@/components/social/ProductDemoComposition'
+import type { AiMovieProps } from '@/components/social/AiMovieComposition'
+import { AI_MOVIE_FRAMES } from '@/components/social/AiMovieComposition'
+
+const Player = dynamic(() => import('@remotion/player').then(m => m.Player), { ssr: false })
+const PostVideoComposition = dynamic(
+  () => import('@/components/social/PostVideoComposition').then(m => m.PostVideoComposition),
+  { ssr: false },
+) as React.ComponentType<PostVideoProps>
+const ProductDemoComposition = dynamic(
+  () => import('@/components/social/ProductDemoComposition').then(m => m.ProductDemoComposition),
+  { ssr: false },
+) as React.ComponentType<ProductDemoProps>
+const AiMovieComposition = dynamic(
+  () => import('@/components/social/AiMovieComposition').then(m => m.AiMovieComposition),
+  { ssr: false },
+) as React.ComponentType<AiMovieProps>
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SocialPost = {
@@ -43,6 +62,10 @@ type PostTemplate = {
   design_preview_url: string | null
   design_prompt: string | null
   logo_url: string | null
+  infographic_url: string | null
+  infographic_preview_url: string | null
+  movie_url: string | null
+  movie_preview_url: string | null
 }
 
 type TabId = 'calendar' | 'platform' | 'create' | 'tracker'
@@ -146,13 +169,56 @@ const statusColor = {
 
 const PIPELINE_STAGES = ['Contacted', 'Qualified', 'Proposal Sent', 'Won']
 
+// ── Hashtag suggestions ────────────────────────────────────────────────────
+const HASHTAG_GROUPS: Record<string, string[]> = {
+  'Real Estate':  ['#realestate','#realtor','#realtorlife','#property'],
+  'Lead Gen':     ['#leadgeneration','#salesfunnel','#crm','#prospecting'],
+  'Marketing':    ['#realestatemarketing','#contentmarketing','#digitalmarketing'],
+  'Investment':   ['#realestateinvesting','#propertyinvestment','#roi'],
+  'Buyers':       ['#homebuyer','#firsttimehomebuyer','#dreamhome'],
+  'Sellers':      ['#homeseller','#justlisted','#newlisting'],
+  'PropTech':     ['#proptech','#realestatetech','#realestatetechnology'],
+}
+
+const KEYWORD_HASHTAGS: [RegExp, string[]][] = [
+  [/real\s*estate|realt/i,   ['#realestate','#realtor','#realtorlife']],
+  [/listing|just\s*listed/i, ['#newlisting','#justlisted','#homeforsale']],
+  [/invest/i,                ['#realestateinvesting','#propertyinvestment']],
+  [/buyer|purchas/i,         ['#homebuyer','#firsttimehomebuyer']],
+  [/seller|selling/i,        ['#homeseller','#sellingtips']],
+  [/mortgage|loan/i,         ['#mortgage','#homeloan']],
+  [/lead/i,                  ['#leadgeneration','#salesfunnel']],
+  [/crm|pipeline|funnel/i,   ['#crm','#proptech','#realestatetech']],
+  [/luxury/i,                ['#luxuryrealestate','#luxuryhomes']],
+  [/commercial/i,            ['#commercialrealestate','#cre']],
+  [/tip|advice|guide|how/i,  ['#realestatetips','#realestateadvice']],
+]
+
+function suggestHashtags(title: string, caption: string, platforms: string[]): string {
+  const text = `${title} ${caption}`
+  const found = new Set<string>()
+  for (const [pattern, tags] of KEYWORD_HASHTAGS) {
+    if (pattern.test(text)) tags.forEach(t => found.add(t))
+  }
+  if (found.size < 3) {
+    ['#realestate','#realtor','#realtorlife'].forEach(t => found.add(t))
+  }
+  if (platforms.includes('LinkedIn')) {
+    ['#linkedin','#realestate'].forEach(t => found.add(t))
+  }
+  const limit = platforms.includes('Instagram') ? 10 : 5
+  return [...found].slice(0, limit).join(' ')
+}
+
 const emptyForm = {
   collateral: '',
   platforms: [] as string[],
   background: '',
   media_type: '',
   cta: '',
+  hook: '',
   caption: '',
+  hashtags: '',
   scheduled_date: '',
   status: 'draft' as SocialPost['status'],
   campaign_id: '',
@@ -208,6 +274,127 @@ function UtmLinkBox({ link }: { link: string }) {
   )
 }
 
+// ── Visual palette system ──────────────────────────────────────────────────
+type SvgPalette = {
+  bg1: string; bg2: string; bg3: string
+  accent: string; accentAlt: string
+  textMain: string; textSub: string; textAccent: string
+  gridStroke: string; slashOpacity: number
+  rowAccents: readonly string[]
+}
+
+const SVG_PALETTES: Record<string, SvgPalette> = {
+  brand: {
+    bg1: '#060608', bg2: '#0e0a00', bg3: '#0a0010',
+    accent: '#f97316', accentAlt: '#fb923c',
+    textMain: 'white', textSub: '#9ca3af', textAccent: '#f97316',
+    gridStroke: '#f97316', slashOpacity: 0.08,
+    rowAccents: ['#f97316','#fb923c','#f59e0b','#10b981','#6366f1'],
+  },
+  crimson: {
+    bg1: '#0e0202', bg2: '#1a0808', bg3: '#1a0510',
+    accent: '#ef4444', accentAlt: '#f97316',
+    textMain: 'white', textSub: '#fca5a5', textAccent: '#fca5a5',
+    gridStroke: '#ef4444', slashOpacity: 0.10,
+    rowAccents: ['#ef4444','#dc2626','#f97316','#b91c1c','#fb923c'],
+  },
+  electric: {
+    bg1: '#030815', bg2: '#0a0f2e', bg3: '#051020',
+    accent: '#3b82f6', accentAlt: '#60a5fa',
+    textMain: 'white', textSub: '#93c5fd', textAccent: '#60a5fa',
+    gridStroke: '#3b82f6', slashOpacity: 0.06,
+    rowAccents: ['#3b82f6','#6366f1','#8b5cf6','#06b6d4','#0ea5e9'],
+  },
+  emerald: {
+    bg1: '#031908', bg2: '#0d2b10', bg3: '#052014',
+    accent: '#10b981', accentAlt: '#34d399',
+    textMain: 'white', textSub: '#6ee7b7', textAccent: '#34d399',
+    gridStroke: '#10b981', slashOpacity: 0.07,
+    rowAccents: ['#10b981','#34d399','#f97316','#06b6d4','#84cc16'],
+  },
+  premium: {
+    bg1: '#0c0818', bg2: '#1a0a2e', bg3: '#0e0a20',
+    accent: '#f59e0b', accentAlt: '#a855f7',
+    textMain: 'white', textSub: '#d8b4fe', textAccent: '#fbbf24',
+    gridStroke: '#f59e0b', slashOpacity: 0.06,
+    rowAccents: ['#f59e0b','#a855f7','#ec4899','#f97316','#38bdf8'],
+  },
+  warm: {
+    bg1: '#1a0e06', bg2: '#2d1a0a', bg3: '#1e1206',
+    accent: '#f59e0b', accentAlt: '#fb923c',
+    textMain: 'white', textSub: '#fcd34d', textAccent: '#fbbf24',
+    gridStroke: '#f59e0b', slashOpacity: 0.09,
+    rowAccents: ['#f59e0b','#fb923c','#f97316','#fbbf24','#d97706'],
+  },
+  slate: {
+    bg1: '#0a0c10', bg2: '#131720', bg3: '#0c1018',
+    accent: '#e2e8f0', accentAlt: '#94a3b8',
+    textMain: 'white', textSub: '#94a3b8', textAccent: '#e2e8f0',
+    gridStroke: '#64748b', slashOpacity: 0.05,
+    rowAccents: ['#e2e8f0','#94a3b8','#f97316','#3b82f6','#10b981'],
+  },
+}
+
+function parsePalette(prompt: string): SvgPalette {
+  const p = prompt.toLowerCase()
+  if (/chaos|overwhelm|frustrat|pain|clutter|mess|anger|broken|crack|scatter|warning|tangl/.test(p)) return SVG_PALETTES.crimson
+  if (/electric|circuit|tech|data|digital|neon|cyber|stream|flow|matrix|code|fintech|futur/.test(p)) return SVG_PALETTES.electric
+  if (/growth|success|result|win|triumph|emerge|bloom|rise|green|outcome/.test(p)) return SVG_PALETTES.emerald
+  if (/launch|reveal|premium|luxury|purple|spotlight|drama|smoke|cinematic|product/.test(p)) return SVG_PALETTES.premium
+  if (/warm|human|question|poll|personal|story|amber|gold|approachab/.test(p)) return SVG_PALETTES.warm
+  if (/minimal|clean|white|simple|clear|clarity|monochrome|neutral|slate/.test(p)) return SVG_PALETTES.slate
+  return SVG_PALETTES.brand
+}
+
+// ── AI visual prompt auto-generator (content-aware, no API cost) ──────────
+function suggestVisualPrompt(title: string, caption: string, background: string): string {
+  const text = `${title} ${caption} ${background}`.toLowerCase()
+
+  if (/chaos|clutter|mess|overwhelm|frustrat|stress|overload|manual|tedious|repetit|same.*every.*day|every.*day/.test(text))
+    return 'Cinematic overhead shot: chaotic business desk drowning in sticky notes, blinking email alerts, overflowing inbox, dozens of overlapping task notifications. Dramatic orange-red spotlight cutting through the clutter from above. Deep dark crimson background. Mood: overwhelmed — but change is coming. Ultra-modern B2B editorial feel.'
+
+  if (/compar|before.*after|vs\b|versus|other.*tool|different|split|contrast|two.*world/.test(text))
+    return 'Sharp split-screen editorial. LEFT: dark crimson chaos — tangled cables, broken gears, overlapping sticky notes, warning triangles, blurred motion suggesting frustration. RIGHT: clean electric scene — a single smooth glowing orange circuit path on crisp white space, order and calm. A razor-sharp diagonal divides both worlds. Professional B2B editorial.'
+
+  if (/time|hour|minute|money|cost|save|roi|invest|spend|wast|drain/.test(text))
+    return 'Cinematic close-up of an hourglass where sand flows into a pile of scattered receipts, to-do lists, and overflowing calendar events. Deep navy background. Warm amber cinematic lighting. Time and money literally draining away. Premium data-visualization aesthetic. Dramatic and urgent.'
+
+  if (/expens|invoice|receipt|financ|account|budget|bill/.test(text))
+    return 'Futuristic finance scene: stacks of receipts and invoices dissolving into clean digital streams flowing into a bright glowing processing node. Electric green data streams on deep charcoal background. Business intelligence aesthetic — precision, automation, control. Clean and professional.'
+
+  if (/data|flow|automat|digital|tech|circuit|stream|process|system|ai|agent/.test(text))
+    return 'Futuristic data flow visualization: streams of business task icons converging elegantly into a central glowing orange node processor. Electric blue and white streams on deep dark navy background. Business intelligence fintech aesthetic — clean, controlled, electric circuit art. Ultra-modern editorial.'
+
+  if (/question|\?|poll|vote|what is|how do|which|opinion|comment|honest/.test(text))
+    return 'Bold minimal warm composition: dark amber-charcoal background. A single enormous glowing question mark centered in frame, surrounded by tiny orbiting business icons (email, calendar, phone, spreadsheet). Premium editorial typography feel. Human, approachable, thought-provoking.'
+
+  if (/reveal|launch|introduc|present|announc|new product|debut|release|coming/.test(text))
+    return 'Dramatic product launch cinematic: dark studio room with a single spotlight illuminating a glowing screen. Deep purple and charcoal background. Orange and violet light rays emanate outward. Premium smoke and floating particle effects. Explosive brand emergence. Theatrical and premium.'
+
+  if (/grow|result|win|success|outcome|achiev|deliver|done|complet|finish|managed/.test(text))
+    return 'Dramatic growth visualization: a single glowing green upward trajectory line cuts through a dark background, leaving a luminous trail. Smaller stagnating lines fade below it. Deep forest green accent light on dark charcoal. Premium editorial business aesthetic. Victory, clarity, momentum.'
+
+  if (/teas|coming soon|follow|sneak|hint|something new|watch|stay/.test(text))
+    return 'Atmospheric teaser composition: deep dark background with a single orange glowing horizon line barely visible at the edge. Dramatic fog and light rays reaching upward. Suspense and anticipation. Cinematic wide-angle editorial. Abstract energy — something powerful is about to emerge.'
+
+  // Generic AgentsPilot default
+  return 'Abstract cinematic composition: glowing orange geometric threads forming an infinity loop on deep charcoal background. Warm center key light with cool blue counter-light. Subtle particle field orbiting the center. Premium editorial feel — clean power, modern authority, business transformation energy. Ultra-modern B2B.'
+}
+
+// ── Movie hook extractor — title first, then punchy line from content ────────
+function extractMovieHook(title: string, background: string, caption: string): string {
+  // Template title is usually the clearest hook
+  if (title && title.length >= 6 && title.length <= 55) return title
+  const source = background || caption || ''
+  const sentences = source.split(/[.!?\n]+/).map(s => s.trim()).filter(s => s.length >= 8)
+  const punchy = sentences.find(s => s.length <= 55) ?? sentences[0] ?? title ?? ''
+  return punchy
+}
+
+function extractMovieHashtags(title: string, caption: string, background: string): string {
+  return suggestHashtags(title, caption, ['LinkedIn']).split(' ').slice(0, 4).join(' ')
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function SocialPage() {
   const [posts, setPosts]           = useState<SocialPost[]>([])
@@ -231,6 +418,21 @@ export default function SocialPage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 
+  // Hook picker
+  const [showHookPicker, setShowHookPicker] = useState(false)
+  const [hookPickerItems, setHookPickerItems] = useState<{ id: string; text: string; category: string; platform: string; avg_score: number; tags: string[]; usage_count: number }[]>([])
+  const [hookPickerSearch, setHookPickerSearch] = useState('')
+  const [hookPickerLoading, setHookPickerLoading] = useState(false)
+
+  async function openHookPicker() {
+    setShowHookPicker(true)
+    if (hookPickerItems.length > 0) return
+    setHookPickerLoading(true)
+    const { data } = await supabase.from('hooks_library').select('id,text,category,platform,avg_score,tags,usage_count').order('avg_score', { ascending: false })
+    setHookPickerItems(data ?? [])
+    setHookPickerLoading(false)
+  }
+
   // Manual LinkedIn setup
   // ── DB templates state ──────────────────────────────────────────────────
   const [dbTemplates, setDbTemplates] = useState<PostTemplate[]>([])
@@ -239,17 +441,44 @@ export default function SocialPage() {
   const [templateForm, setTemplateForm] = useState({
     title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: 0,
     design_url: '', design_preview_url: '', design_prompt: '', logo_url: '',
+    infographic_url: '', infographic_preview_url: '',
+    movie_url: '', movie_preview_url: '',
   })
   const [designUploading, setDesignUploading] = useState(false)
   const [cardDesignUploading, setCardDesignUploading] = useState<string | null>(null) // template title being uploaded
+  const [claudeDesigning, setClaudeDesigning] = useState<string | null>(null) // template title being claude-designed
+  const [movieTemplate, setMovieTemplate] = useState<typeof FALLBACK_TEMPLATES[0] | null>(null)
+  const [designTab, setDesignTab] = useState<'image' | 'movie' | 'infographic' | null>(null)
+  const [templateDesignGenerating, setTemplateDesignGenerating] = useState<string | null>(null)
   const [templateFields, setTemplateFields] = useState<Set<string>>(new Set())
   const [fluxGenerating, setFluxGenerating] = useState(false)
+  const [claudeDesignPrompt, setClaudeDesignPrompt] = useState<string | null>(null)
+  const [canvaTemplateUrl, setCanvaTemplateUrl] = useState('')
+  const [infographicQueuing, setInfographicQueuing] = useState(false)
+  const [movieGenerating, setMovieGenerating] = useState(false)
+  const [movieMode, setMovieMode] = useState<'basic' | 'ai' | 'product' | 'upload'>('basic')
+  const [movieUploading, setMovieUploading] = useState(false)
+  const [productScreenshots, setProductScreenshots] = useState<string[]>([])
+  const [productScreenshotUploading, setProductScreenshotUploading] = useState(false)
+  const [movieQueuing, setMovieQueuing] = useState(false)
+  const [aiMovieGenerating, setAiMovieGenerating] = useState(false)
+  const [movieEditHook, setMovieEditHook] = useState('')
+  const [movieEditCaption, setMovieEditCaption] = useState('')
   const [showCanvaPicker, setShowCanvaPicker] = useState(false)
   const [canvaDesigns, setCanvaDesigns] = useState<{ id: string; title: string; thumbnail: string; edit_url: string }[]>([])
   const [canvaSearchQuery, setCanvaSearchQuery] = useState('')
+  // Canva AI generate flow
+  const [canvaGenerating, setCanvaGenerating] = useState(false)
+  const [canvaCandidates, setCanvaCandidates] = useState<{ candidate_id: string; url: string; thumbnail: string; job_id: string }[]>([])
+  const [canvaConfirming, setCanvaConfirming] = useState<string | null>(null) // candidate_id being confirmed
   // Post preview modal
   const [showPostPreview, setShowPostPreview] = useState(false)
-  const [selectedDesign, setSelectedDesign] = useState<{ url?: string | null; design_url?: string | null } | null>(null)
+  const [selectedDesign, setSelectedDesign] = useState<{
+    url?: string | null; design_url?: string | null
+    infographic_preview_url?: string | null; infographic_url?: string | null
+    movie_preview_url?: string | null; movie_url?: string | null
+  } | null>(null)
+  const [selectedMediaSlot, setSelectedMediaSlot] = useState<'image' | 'infographic' | 'movie'>('image')
   const [templateSaving, setTemplateSaving] = useState(false)
   const [showTemplateForm, setShowTemplateForm] = useState(false)
 
@@ -259,12 +488,18 @@ export default function SocialPage() {
     design_preview_url?: string | null
     design_prompt?: string | null
     logo_url?: string | null
+    infographic_url?: string | null
+    infographic_preview_url?: string | null
+    movie_url?: string | null
+    movie_preview_url?: string | null
   }
   const activeTemplates: ActiveTemplate[] = dbTemplates.length > 0
     ? dbTemplates.filter(t => t.active).map(t => ({
         collateral: t.title, platforms: t.platforms, media_type: t.media_type,
         background: t.background, cta: t.cta, caption: t.caption,
         design_url: t.design_url, design_preview_url: t.design_preview_url, design_prompt: t.design_prompt, logo_url: t.logo_url,
+        infographic_url: t.infographic_url, infographic_preview_url: t.infographic_preview_url,
+        movie_url: t.movie_url, movie_preview_url: t.movie_preview_url,
       }))
     : FALLBACK_TEMPLATES
 
@@ -320,11 +555,32 @@ export default function SocialPage() {
     if (data) setDbTemplates(data)
   }
 
+  async function fetchHooksForSuggestion() {
+    if (hookPickerItems.length > 0) return
+    const { data } = await supabase.from('hooks_library').select('id,text,category,platform,avg_score,tags,usage_count').order('avg_score', { ascending: false })
+    setHookPickerItems(data ?? [])
+  }
+
+  function suggestHookForTitle(title: string, hooks: typeof hookPickerItems): string | null {
+    if (hooks.length === 0) return null
+    const words = title.toLowerCase().split(/\W+/).filter(w => w.length > 3)
+    let best = hooks[0]
+    let bestScore = -1
+    for (const h of hooks) {
+      const tagMatch  = (h.tags ?? []).filter(t => words.some(w => t.includes(w) || w.includes(t))).length
+      const textMatch = words.filter(w => h.text.toLowerCase().includes(w)).length
+      const score     = tagMatch * 3 + textMatch * 2 + Number(h.avg_score) / 20
+      if (score > bestScore) { bestScore = score; best = h }
+    }
+    return best.text
+  }
+
   useEffect(() => {
     fetchPosts()
     fetchConnections()
     fetchCampaigns()
     fetchTemplates()
+    fetchHooksForSuggestion()
     // Handle OAuth redirect params
     const params = new URLSearchParams(window.location.search)
     if (params.get('connected')) {
@@ -334,6 +590,49 @@ export default function SocialPage() {
     }
     if (params.get('error')) {
       setError(`Connection failed: ${params.get('error')}`)
+      window.history.replaceState({}, '', '/social')
+    }
+    if (params.get('canva_connected')) {
+      setSuccess('Canva connected! Click "Generate in Canva" again to create your design.')
+      window.history.replaceState({}, '', '/social')
+    }
+    if (params.get('canva_error')) {
+      setError(`Canva OAuth failed: ${params.get('canva_error')}`)
+      window.history.replaceState({}, '', '/social')
+    }
+    // Pre-fill campaign when coming from Campaigns page shortcut
+    const campaignIdParam = params.get('campaign_id')
+    const postIdParam     = params.get('post_id')
+    if (postIdParam) {
+      // Load existing post into edit form
+      setActiveTab('create')
+      supabase.from('social_posts').select('*').eq('id', postIdParam).single().then(({ data }) => {
+        if (data) {
+          setEditingPost(data)
+          setForm({
+            collateral:     data.collateral,
+            platforms:      data.platforms.split(/,\s*/).map((p: string) => p.trim()).filter(Boolean),
+            background:     data.background,
+            media_type:     data.media_type,
+            cta:            data.cta,
+            caption:        data.caption,
+            scheduled_date: data.scheduled_date ?? '',
+            status:         data.status,
+            campaign_id:    data.campaign_id ?? '',
+            hook:           '',
+            hashtags:       '',
+            add_to_library: false,
+            library_stages: [],
+          })
+        }
+      })
+      window.history.replaceState({}, '', '/social')
+    } else if (campaignIdParam) {
+      setForm(f => ({ ...f, campaign_id: campaignIdParam }))
+      setActiveTab('create')
+      window.history.replaceState({}, '', '/social')
+    } else if (params.get('tab') === 'create') {
+      setActiveTab('create')
       window.history.replaceState({}, '', '/social')
     }
   }, [])
@@ -443,8 +742,8 @@ export default function SocialPage() {
   }
 
   function applyTemplate(t: typeof FALLBACK_TEMPLATES[0]) {
+    const suggestedHook = suggestHookForTitle(t.collateral, hookPickerItems)
     setForm(f => {
-      // If a campaign is already selected, append its UTM to the template caption
       const LANDING = 'https://agentspilot-marketing.vercel.app/signup'
       let caption = t.caption
       if (f.campaign_id) {
@@ -460,15 +759,22 @@ export default function SocialPage() {
       return {
         ...f,
         collateral: t.collateral,
-        platforms: t.platforms.split(', ').map(p => p.trim()),
+        platforms: t.platforms.split(/,\s*/).map(p => p.trim()).filter(Boolean),
         background: t.background,
         media_type: t.media_type,
         cta: t.cta,
         caption,
+        hook: suggestedHook ?? f.hook,
       }
     })
     setSelectedTemplate(t.collateral)
-    setSelectedDesign({ url: (t as ActiveTemplate).design_preview_url, design_url: (t as ActiveTemplate).design_url })
+    const at = t as ActiveTemplate
+    setSelectedDesign({
+      url: at.design_preview_url, design_url: at.design_url,
+      infographic_preview_url: at.infographic_preview_url, infographic_url: at.infographic_url,
+      movie_preview_url: at.movie_preview_url, movie_url: at.movie_url,
+    })
+    setSelectedMediaSlot(at.design_preview_url ? 'image' : at.infographic_preview_url ? 'infographic' : 'movie')
     setTemplateFields(new Set(['collateral', 'platforms', 'background', 'media_type', 'cta', 'caption']))
   }
 
@@ -476,13 +782,18 @@ export default function SocialPage() {
     e.preventDefault()
     setSaving(true)
     setError(null)
+    const hashtagSuffix = form.hashtags.trim() ? `\n\n${form.hashtags.trim()}` : ''
+    const finalCaption = form.hook
+      ? `${form.hook}\n\n${form.caption}${hashtagSuffix}`
+      : `${form.caption}${hashtagSuffix}`
     const payload = {
       collateral: form.collateral,
       platforms: form.platforms.join(', '),
       background: form.background,
       media_type: form.media_type,
       cta: form.cta,
-      caption: form.caption,
+      caption: finalCaption,
+      hook_text: form.hook || null,
       scheduled_date: form.scheduled_date || null,
       status: form.status,
       campaign_id: form.campaign_id || null,
@@ -492,6 +803,17 @@ export default function SocialPage() {
       : await supabase.from('social_posts').insert([payload])
     setSaving(false)
     if (error) { setError(error.message); return }
+
+    // ── Increment hook usage_count when hook is used ──────────────────────
+    if (form.hook) {
+      const matched = hookPickerItems.find(h => h.text === form.hook)
+      if (matched) {
+        await supabase.from('hooks_library')
+          .update({ usage_count: matched.usage_count + 1 })
+          .eq('id', matched.id)
+        setHookPickerItems(prev => prev.map(h => h.id === matched.id ? { ...h, usage_count: h.usage_count + 1 } : h))
+      }
+    }
 
     // ── Also save to content_library if checkbox is checked ──────────────
     if (form.add_to_library && form.caption && form.library_stages.length > 0) {
@@ -557,13 +879,13 @@ export default function SocialPage() {
   // ── Template CRUD ────────────────────────────────────────────────────────
   function openNewTemplate() {
     setEditingTemplate(null)
-    setTemplateForm({ title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: dbTemplates.length + 1, design_url: '', design_preview_url: '', design_prompt: '', logo_url: '' })
+    setTemplateForm({ title: '', platforms: '', media_type: '', background: '', cta: '', caption: '', sort_order: dbTemplates.length + 1, design_url: '', design_preview_url: '', design_prompt: '', logo_url: '', infographic_url: '', infographic_preview_url: '', movie_url: '', movie_preview_url: '' })
     setShowTemplateForm(true)
   }
 
   function openEditTemplate(t: PostTemplate) {
     setEditingTemplate(t)
-    setTemplateForm({ title: t.title, platforms: t.platforms, media_type: t.media_type, background: t.background, cta: t.cta, caption: t.caption, sort_order: t.sort_order, design_url: t.design_url ?? '', design_preview_url: t.design_preview_url ?? '', design_prompt: t.design_prompt ?? '', logo_url: t.logo_url ?? '' })
+    setTemplateForm({ title: t.title, platforms: t.platforms, media_type: t.media_type, background: t.background, cta: t.cta, caption: t.caption, sort_order: t.sort_order, design_url: t.design_url ?? '', design_preview_url: t.design_preview_url ?? '', design_prompt: t.design_prompt ?? '', logo_url: t.logo_url ?? '', infographic_url: t.infographic_url ?? '', infographic_preview_url: t.infographic_preview_url ?? '', movie_url: t.movie_url ?? '', movie_preview_url: t.movie_preview_url ?? '' })
     setShowTemplateForm(true)
   }
 
@@ -591,6 +913,298 @@ export default function SocialPage() {
     await supabase.from('post_templates').update({ design_preview_url: publicUrl }).eq('id', dbT.id)
     setCardDesignUploading(null)
     fetchTemplates()
+  }
+
+  function buildPostSVG(title: string, hook: string, caption: string, platform: string, hashtags: string, aiPrompt?: string): string {
+    const esc   = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    const trunc = (s: string, n: number) => s.length > n ? s.slice(0, n) + '…' : s
+    const pal   = parsePalette(aiPrompt ?? '')
+
+    const headline  = hook || title || 'Your Post'
+    const headA     = trunc(headline, 22)
+    const headB     = headline.length > 22 ? trunc(headline.slice(22), 22) : ''
+    const headC     = headline.length > 44 ? trunc(headline.slice(44), 22) : ''
+    const body      = trunc(caption.replace(/\n/g,' '), 120)
+    const tags      = hashtags.split(/\s+/).filter(t=>t.startsWith('#')).slice(0,5)
+    const plat      = platform || 'LinkedIn'
+
+    // Split body into two wrapped lines
+    const bodyWords = body.split(' ')
+    const bodyLine1 = bodyWords.slice(0, Math.ceil(bodyWords.length / 2)).join(' ')
+    const bodyLine2 = bodyWords.slice(Math.ceil(bodyWords.length / 2)).join(' ')
+
+    const headY1    = title && hook ? 220 : 200
+    const headY2    = headY1 + 72
+    const headY3    = headY2 + 72
+
+    return `<svg viewBox="0 0 1200 628" width="1200" height="628" xmlns="http://www.w3.org/2000/svg" font-family="Inter,system-ui,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${pal.bg1}"/>
+      <stop offset="60%" stop-color="${pal.bg2}"/>
+      <stop offset="100%" stop-color="${pal.bg3}"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${pal.accent}"/>
+      <stop offset="100%" stop-color="${pal.accentAlt}"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="25%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="${pal.accent}" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="${pal.accent}" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur4"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="blur12"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="628" fill="url(#bg)"/>
+  <rect width="1200" height="628" fill="url(#glow)"/>
+
+  <!-- Perspective grid -->
+  <g opacity="0.07" stroke="${pal.gridStroke}" stroke-width="1">
+    ${[0,1,2,3,4,5,6,7,8].map(i=>`<line x1="${i*150}" y1="0" x2="${600 + (i-4)*80}" y2="628"/>`).join('')}
+    ${[1,2,3,4,5].map(i=>`<line x1="0" y1="${i*105}" x2="1200" y2="${i*105}"/>`).join('')}
+  </g>
+
+  <!-- Left accent slash -->
+  <polygon points="0,0 80,0 0,628" fill="${pal.accent}" opacity="${pal.slashOpacity}"/>
+  <polygon points="0,0 12,0 0,160" fill="${pal.accent}" opacity="0.7"/>
+
+  <!-- Top-left rule -->
+  <rect x="0" y="0" width="6" height="628" fill="url(#accent)"/>
+
+  <!-- Glow orb behind text (blurred) -->
+  <circle cx="320" cy="314" r="200" fill="${pal.accent}" opacity="0.06" filter="url(#blur12)"/>
+
+  <!-- Logo mark -->
+  <polygon points="30,22 58,38 30,54" fill="${pal.accent}"/>
+  <text x="70" y="42" fill="${pal.textMain}" font-size="12" font-weight="800" letter-spacing="4" opacity="0.9">AGENTS PILOT</text>
+  <line x1="28" y1="66" x2="680" y2="66" stroke="${pal.accent}" stroke-width="1" opacity="0.4"/>
+
+  <!-- Platform badge — top right -->
+  <rect x="${1200 - plat.length * 9 - 52}" y="18" width="${plat.length * 9 + 36}" height="32" rx="6" fill="${pal.accent}" opacity="0.12"/>
+  <rect x="${1200 - plat.length * 9 - 52}" y="18" width="${plat.length * 9 + 36}" height="32" rx="6" fill="none" stroke="${pal.accent}" stroke-width="1.5"/>
+  <text x="${1200 - plat.length * 4.5 - 34}" y="39" fill="${pal.accent}" font-size="12" font-weight="700" letter-spacing="2" text-anchor="middle">${esc(plat.toUpperCase())}</text>
+
+  ${title && hook ? `
+  <!-- Category label -->
+  <text x="28" y="106" fill="${pal.textAccent}" font-size="14" font-weight="700" letter-spacing="2" opacity="0.85">${esc(trunc(title,48).toUpperCase())}</text>
+  <line x1="28" y1="114" x2="${Math.min(28 + title.length * 9, 560)}" y2="114" stroke="${pal.accent}" stroke-width="2" opacity="0.5"/>
+  ` : ''}
+
+  <!-- Main headline — large impactful text -->
+  <text x="28" y="${headY1}" fill="${pal.textMain}" font-size="76" font-weight="900" letter-spacing="-2">${esc(headA)}</text>
+  ${headB ? `<text x="28" y="${headY2}" fill="${pal.accent}" font-size="76" font-weight="900" letter-spacing="-2">${esc(headB)}</text>` : ''}
+  ${headC ? `<text x="28" y="${headY3}" fill="${pal.textMain}" font-size="76" font-weight="900" letter-spacing="-2" opacity="0.85">${esc(headC)}</text>` : ''}
+
+  <!-- Divider line with glow -->
+  <line x1="28" y1="${headY3 || headY2 || headY1 + 40}" x2="700" y2="${headY3 || headY2 || headY1 + 40}" stroke="url(#accent)" stroke-width="2" opacity="0.5"/>
+
+  <!-- Body text -->
+  ${body ? `
+  <text x="28" y="${(headY3 || headY2 || headY1) + 58}" fill="${pal.textSub}" font-size="20" font-weight="400">${esc(bodyLine1)}</text>
+  ${bodyLine2 ? `<text x="28" y="${(headY3 || headY2 || headY1) + 84}" fill="${pal.textSub}" font-size="20" font-weight="400">${esc(bodyLine2)}</text>` : ''}
+  ` : ''}
+
+  <!-- Bottom bar -->
+  <rect x="0" y="580" width="1200" height="48" fill="${pal.accent}" opacity="0.07"/>
+  <line x1="0" y1="580" x2="1200" y2="580" stroke="${pal.accent}" stroke-width="1" opacity="0.3"/>
+
+  <!-- Hashtags -->
+  ${tags.map((tag, i) => `
+  <rect x="${28 + i * 190}" y="590" width="${tag.length * 8 + 20}" height="26" rx="13" fill="${pal.accent}" opacity="0.15"/>
+  <text x="${28 + i * 190 + 10}" y="607" fill="${pal.accentAlt}" font-size="13" font-weight="600">${esc(tag)}</text>
+  `).join('')}
+
+  <!-- Corner accent -->
+  <polygon points="1200,628 1140,628 1200,568" fill="${pal.accent}" opacity="0.15"/>
+  <polygon points="1200,628 1192,628 1200,620" fill="${pal.accent}" opacity="0.6"/>
+</svg>`
+  }
+
+  async function generateClaudeDesign(template: typeof FALLBACK_TEMPLATES[0]) {
+    setClaudeDesigning(template.collateral)
+    setError(null)
+    try {
+      const platform = template.platforms.split(',')[0].trim()
+      const svg = buildPostSVG(
+        template.collateral,
+        form.hook || '',
+        template.caption,
+        platform,
+        form.hashtags || '',
+        (template as ActiveTemplate).design_prompt || suggestVisualPrompt(template.collateral, template.caption, template.background),
+      )
+
+      // SVG → PNG in browser via canvas
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+        const url = URL.createObjectURL(svgBlob)
+        const img = new window.Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width  = 1200
+          canvas.height = 628
+          const ctx = canvas.getContext('2d')!
+          ctx.drawImage(img, 0, 0, 1200, 628)
+          URL.revokeObjectURL(url)
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/png')
+        }
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG load failed')) }
+        img.src = url
+      })
+
+      // Upload PNG to Supabase storage
+      const path = `claude-${Date.now()}-${Math.random().toString(36).slice(2)}.png`
+      const file = new File([blob], path, { type: 'image/png' })
+      const { data, error: upErr } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+      if (upErr || !data) throw new Error(upErr?.message ?? 'Upload failed')
+      const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
+
+      // Apply template + set design
+      applyTemplate(template)
+      setSelectedDesign({ url: publicUrl })
+      setSuccess('Claude design generated!')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Claude design failed')
+    } finally {
+      setClaudeDesigning(null)
+    }
+  }
+
+  function buildInfographicSVG(title: string, caption: string, platform: string, aiPrompt?: string): string {
+    const esc   = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    const trunc = (s: string, n: number) => s.length > n ? s.slice(0, n) + '…' : s
+    const pal   = parsePalette(aiPrompt ?? '')
+    const lines = caption.split(/[\n.!?]+/).map(s => s.trim()).filter(s => s.length > 4).slice(0, 5)
+    const plat  = platform || 'LinkedIn'
+
+    // Color system: each row gets an accent (palette-driven)
+    const ACCENTS = pal.rowAccents
+    const ROW_H   = 82
+    const ROW_Y0  = 168
+
+    const rows = lines.map((line, i) => {
+      const acc = ACCENTS[i % ACCENTS.length]
+      const y   = ROW_Y0 + i * ROW_H
+      return `
+  <!-- Row ${i+1} -->
+  <rect x="44" y="${y}" width="1112" height="${ROW_H - 8}" rx="10" fill="${acc}" opacity="0.06"/>
+  <rect x="44" y="${y}" width="1112" height="${ROW_H - 8}" rx="10" fill="none" stroke="${acc}" stroke-width="1" opacity="0.25"/>
+  <!-- Number circle -->
+  <circle cx="84" cy="${y + (ROW_H - 8)/2}" r="20" fill="${acc}" opacity="0.2"/>
+  <circle cx="84" cy="${y + (ROW_H - 8)/2}" r="20" fill="none" stroke="${acc}" stroke-width="1.5"/>
+  <text x="84" y="${y + (ROW_H - 8)/2 + 6}" fill="${acc}" font-size="16" font-weight="800" text-anchor="middle">${i+1}</text>
+  <!-- Content -->
+  <text x="118" y="${y + (ROW_H - 8)/2 + 7}" fill="white" font-size="20" font-weight="600">${esc(trunc(line, 68))}</text>
+  <!-- Right accent line -->
+  <rect x="1140" y="${y + 8}" width="4" height="${ROW_H - 24}" rx="2" fill="${acc}" opacity="0.5"/>
+`}).join('')
+
+    return `<svg viewBox="0 0 1200 628" width="1200" height="628" xmlns="http://www.w3.org/2000/svg" font-family="Inter,system-ui,sans-serif">
+  <defs>
+    <linearGradient id="ibg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${pal.bg1}"/>
+      <stop offset="100%" stop-color="${pal.bg2}"/>
+    </linearGradient>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${pal.accent}" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="${pal.accent}" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="gblur"><feGaussianBlur stdDeviation="20"/></filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="628" fill="url(#ibg)"/>
+
+  <!-- Subtle dot grid -->
+  <pattern id="dots" width="40" height="40" patternUnits="userSpaceOnUse">
+    <circle cx="20" cy="20" r="1" fill="${pal.accent}" opacity="0.12"/>
+  </pattern>
+  <rect width="1200" height="628" fill="url(#dots)"/>
+
+  <!-- Header band -->
+  <rect x="0" y="0" width="1200" height="128" fill="url(#hdr)"/>
+  <rect x="0" y="0" width="8" height="628" fill="${pal.accent}"/>
+  <line x1="8" y1="128" x2="1200" y2="128" stroke="${pal.accent}" stroke-width="1.5" opacity="0.35"/>
+
+  <!-- Glow orb top-left -->
+  <circle cx="200" cy="80" r="100" fill="${pal.accent}" opacity="0.08" filter="url(#gblur)"/>
+
+  <!-- Logo -->
+  <polygon points="28,24 56,40 28,56" fill="${pal.accent}"/>
+  <text x="68" y="44" fill="${pal.textMain}" font-size="12" font-weight="800" letter-spacing="4">AGENTS PILOT</text>
+
+  <!-- Title -->
+  <text x="28" y="100" fill="${pal.textMain}" font-size="30" font-weight="900" letter-spacing="-0.5">${esc(trunc(title, 52))}</text>
+  <line x1="28" y1="112" x2="${Math.min(28 + title.length * 17, 700)}" y2="112" stroke="${pal.accent}" stroke-width="2" opacity="0.6"/>
+
+  <!-- Platform pill -->
+  <rect x="${1200 - plat.length * 9 - 52}" y="20" width="${plat.length * 9 + 36}" height="30" rx="6" fill="${pal.accent}" opacity="0.12"/>
+  <rect x="${1200 - plat.length * 9 - 52}" y="20" width="${plat.length * 9 + 36}" height="30" rx="6" fill="none" stroke="${pal.accent}" stroke-width="1.5"/>
+  <text x="${1200 - plat.length * 4.5 - 34}" y="40" fill="${pal.accent}" font-size="12" font-weight="700" letter-spacing="2" text-anchor="middle">${esc(plat.toUpperCase())}</text>
+
+  <!-- Rows -->
+  ${rows}
+
+  <!-- Footer -->
+  <rect x="0" y="596" width="1200" height="32" fill="${pal.accent}" opacity="0.06"/>
+  <line x1="8" y1="596" x2="1200" y2="596" stroke="${pal.accent}" stroke-width="1" opacity="0.2"/>
+  <text x="28" y="616" fill="${pal.textSub}" font-size="12" font-weight="500">agentspilot.com</text>
+  <text x="1172" y="616" fill="${pal.textSub}" font-size="12" font-weight="500" text-anchor="end">${esc(plat)}</text>
+
+  <!-- Corner triangle accent -->
+  <polygon points="1200,628 1160,628 1200,596" fill="${pal.accent}" opacity="0.3"/>
+</svg>`
+  }
+
+  async function generateTemplateDesign(mode: 'auto' | 'infographic' | 'post') {
+    setTemplateDesignGenerating(mode)
+    try {
+      const platform = templateForm.platforms?.split(',')[0]?.trim() || 'LinkedIn'
+      const aiPrompt = templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background)
+      const svg = mode === 'infographic'
+        ? buildInfographicSVG(templateForm.title || '', templateForm.caption || templateForm.background || '', platform, aiPrompt)
+        : buildPostSVG(
+            templateForm.title || '',
+            templateForm.cta || '',
+            templateForm.caption || templateForm.background || '',
+            platform,
+            '',
+            aiPrompt,
+          )
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+        const url = URL.createObjectURL(svgBlob)
+        const img = new window.Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1200; canvas.height = 628
+          canvas.getContext('2d')!.drawImage(img, 0, 0, 1200, 628)
+          URL.revokeObjectURL(url)
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('Export failed')), 'image/png')
+        }
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG load failed')) }
+        img.src = url
+      })
+
+      const path = `${mode}-${Date.now()}.png`
+      const file = new File([blob], path, { type: 'image/png' })
+      const { data, error: upErr } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+      if (upErr || !data) throw new Error(upErr?.message ?? 'Upload failed')
+      const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
+      setTemplateForm(f => ({ ...f, design_preview_url: publicUrl }))
+      if (editingTemplate) {
+        await supabase.from('post_templates').update({ design_preview_url: publicUrl }).eq('id', editingTemplate.id)
+        fetchTemplates()
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Design generation failed')
+    } finally {
+      setTemplateDesignGenerating(null)
+    }
   }
 
   function buildEnrichedPrompt() {
@@ -649,6 +1263,222 @@ export default function SocialPage() {
     alert(`✅ "${templateTitle}" queued for Canva finalization.\nTell Claude: "process pending Canva jobs"`)
   }
 
+  async function generateMovie() {
+    if (!editingTemplate) return
+    setMovieGenerating(true)
+    setError(null)
+    try {
+      const platform = templateForm.platforms?.split(',')[0]?.trim() || 'LinkedIn'
+      const aiPrompt = templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background)
+      const svg = buildPostSVG(templateForm.title || '', templateForm.cta || '', templateForm.caption || templateForm.background || '', platform, '', aiPrompt)
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+        const url = URL.createObjectURL(svgBlob)
+        const img = new window.Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1200; canvas.height = 628
+          const ctx = canvas.getContext('2d')!
+          ctx.drawImage(img, 0, 0, 1200, 628)
+          // Play button overlay
+          ctx.fillStyle = 'rgba(0,0,0,0.45)'
+          ctx.beginPath(); ctx.arc(600, 314, 56, 0, Math.PI * 2); ctx.fill()
+          ctx.fillStyle = '#f97316'
+          ctx.beginPath(); ctx.moveTo(582, 286); ctx.lineTo(582, 342); ctx.lineTo(630, 314); ctx.closePath(); ctx.fill()
+          URL.revokeObjectURL(url)
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('Export failed')), 'image/png')
+        }
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG load failed')) }
+        img.src = url
+      })
+
+      const path = `movie-thumb-${Date.now()}.png`
+      const file = new File([blob], path, { type: 'image/png' })
+      const { data, error: upErr } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+      if (upErr || !data) throw new Error(upErr?.message ?? 'Upload failed')
+      const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
+
+      const movieUrl = `remotion:${editingTemplate.id}`
+      setTemplateForm(f => ({ ...f, movie_preview_url: publicUrl, movie_url: movieUrl }))
+      await supabase.from('post_templates').update({ movie_preview_url: publicUrl, movie_url: movieUrl }).eq('id', editingTemplate.id)
+      if (editingTemplate.collateral === selectedTemplate) {
+        setSelectedDesign(d => d ? { ...d, movie_preview_url: publicUrl, movie_url: movieUrl } : d)
+        setSelectedMediaSlot('movie')
+      }
+      fetchTemplates()
+      setSuccess('Movie preview generated!')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Movie generation failed')
+    } finally {
+      setMovieGenerating(false)
+    }
+  }
+
+  async function uploadProductScreenshot(file: File) {
+    if (productScreenshots.length >= 3) return
+    setProductScreenshotUploading(true)
+    const ext = file.name.split('.').pop()
+    const path = `product-screenshot-${Date.now()}.${ext}`
+    const { data, error } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+    setProductScreenshotUploading(false)
+    if (error || !data) return
+    const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
+    setProductScreenshots(prev => [...prev, publicUrl])
+  }
+
+  async function generateProductMovie() {
+    if (!editingTemplate || productScreenshots.length === 0) return
+    setMovieGenerating(true)
+    setError(null)
+    try {
+      const firstUrl = productScreenshots[0]
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const img = new window.Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1200; canvas.height = 628
+          const ctx = canvas.getContext('2d')!
+          const scale = Math.max(1200 / img.width, 628 / img.height)
+          const w = img.width * scale, h = img.height * scale
+          ctx.drawImage(img, (1200 - w) / 2, (628 - h) / 2, w, h)
+          ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, 1200, 628)
+          ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.arc(600, 314, 56, 0, Math.PI * 2); ctx.fill()
+          ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.moveTo(582, 286); ctx.lineTo(582, 342); ctx.lineTo(630, 314); ctx.closePath(); ctx.fill()
+          ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '700 11px Inter,system-ui,sans-serif'
+          ctx.textAlign = 'center'
+          ctx.fillText(`PRODUCT DEMO  •  ${productScreenshots.length} screen${productScreenshots.length > 1 ? 's' : ''}`, 600, 390)
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('Export failed')), 'image/png')
+        }
+        img.onerror = () => reject(new Error('Image load failed'))
+        img.src = firstUrl
+      })
+
+      const path = `product-movie-thumb-${Date.now()}.png`
+      const file = new File([blob], path, { type: 'image/png' })
+      const { data, error: upErr } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+      if (upErr || !data) throw new Error(upErr?.message ?? 'Upload failed')
+      const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(data.path)
+
+      const movieUrl = `product:${productScreenshots.join('|')}`
+      setTemplateForm(f => ({ ...f, movie_preview_url: publicUrl, movie_url: movieUrl }))
+      await supabase.from('post_templates').update({ movie_preview_url: publicUrl, movie_url: movieUrl }).eq('id', editingTemplate.id)
+      if (editingTemplate.collateral === selectedTemplate) {
+        setSelectedDesign(d => d ? { ...d, movie_preview_url: publicUrl, movie_url: movieUrl } : d)
+        setSelectedMediaSlot('movie')
+      }
+      fetchTemplates()
+      setSuccess(`Product demo saved — ${productScreenshots.length} screen${productScreenshots.length > 1 ? 's' : ''}!`)
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Product movie generation failed')
+    } finally {
+      setMovieGenerating(false)
+    }
+  }
+
+  async function queueMovieJob() {
+    if (!editingTemplate) return
+    setMovieQueuing(true)
+    try {
+      const prompt = `${editingTemplate.background} ${editingTemplate.caption}`.slice(0, 300)
+      const res = await fetch('/api/canva-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: editingTemplate.id,
+          title: editingTemplate.title,
+          query: prompt,
+          design_type: 'movie',
+        }),
+      })
+      const d = await res.json()
+      if (d.job_id) { setSuccess('Queued — type "movie" in Claude Code'); }
+    } catch {
+      setError('Failed to queue movie job')
+    } finally {
+      setMovieQueuing(false)
+    }
+  }
+
+  async function generateAiMovie() {
+    if (!editingTemplate) return
+    setAiMovieGenerating(true)
+    setError(null)
+    try {
+      const prompt = templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background)
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.image) throw new Error(data.error || 'Image generation failed')
+
+      // Convert base64 to blob and upload to Supabase
+      const base64 = data.image.split(',')[1]
+      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+      const blob = new Blob([bytes], { type: data.contentType || 'image/jpeg' })
+      const ext = (data.contentType || 'image/jpeg').includes('png') ? 'png' : 'jpg'
+      const filePath = `designs/ai-movie-${editingTemplate.id}-${Date.now()}.${ext}`
+      const { data: upData, error: upErr } = await supabase.storage
+        .from('post-designs')
+        .upload(filePath, blob, { contentType: data.contentType || 'image/jpeg', upsert: true })
+      if (upErr || !upData) throw new Error(upErr?.message ?? 'Upload failed')
+      const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(upData.path)
+
+      const movieUrl = `ai-movie:${publicUrl}`
+      setTemplateForm(f => ({ ...f, movie_url: movieUrl, movie_preview_url: publicUrl }))
+      await supabase.from('post_templates')
+        .update({ movie_url: movieUrl, movie_preview_url: publicUrl })
+        .eq('id', editingTemplate.id)
+      if (editingTemplate.collateral === selectedTemplate) {
+        setSelectedDesign(d => d ? { ...d, movie_preview_url: publicUrl, movie_url: movieUrl } : d)
+        setSelectedMediaSlot('movie')
+      }
+      fetchTemplates()
+      setSuccess('AI Movie created!')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setAiMovieGenerating(false)
+    }
+  }
+
+  async function uploadMovie(file: File) {
+    if (!editingTemplate) return
+    setMovieUploading(true)
+    setError(null)
+    try {
+      const ext = file.name.split('.').pop() ?? 'mp4'
+      const filePath = `designs/movie-${editingTemplate.id}-${Date.now()}.${ext}`
+      const { data: upData, error: upErr } = await supabase.storage
+        .from('post-designs')
+        .upload(filePath, file, { contentType: file.type || 'video/mp4', upsert: true })
+      if (upErr || !upData) throw new Error(upErr?.message ?? 'Upload failed')
+      const { data: { publicUrl } } = supabase.storage.from('post-designs').getPublicUrl(upData.path)
+
+      const movieUrl = `upload:${publicUrl}`
+      // Don't store video URL as preview image — use existing image preview if available
+      setTemplateForm(f => ({ ...f, movie_url: movieUrl }))
+      await supabase.from('post_templates')
+        .update({ movie_url: movieUrl })
+        .eq('id', editingTemplate.id)
+      if (editingTemplate.collateral === selectedTemplate) {
+        setSelectedDesign(d => d ? { ...d, movie_url: movieUrl } : d)
+        setSelectedMediaSlot('movie')
+      }
+      fetchTemplates()
+      setSuccess('Video uploaded!')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setMovieUploading(false)
+    }
+  }
+
   async function openCanvaPicker() {
     if (canvaDesigns.length === 0) {
       const res = await fetch('/api/canva/designs')
@@ -658,11 +1488,227 @@ export default function SocialPage() {
     setShowCanvaPicker(true)
   }
 
+  async function generateClaudeDesignFromTemplate() {
+    setTemplateDesignGenerating('post')
+    setError(null)
+    try {
+      const res = await fetch('/api/claude-design', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:         templateForm.title,
+          background:    templateForm.background,
+          cta:           templateForm.cta,
+          caption:       templateForm.caption,
+          platforms:     templateForm.platforms,
+          design_prompt: templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Claude Design failed')
+
+      let publicUrl = ''
+
+      if (data.image) {
+        // AI image + text overlay via Canvas
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          const img = new window.Image()
+          img.onload = () => {
+            const SIZE = 1080
+            const canvas = document.createElement('canvas')
+            canvas.width = SIZE; canvas.height = SIZE
+            const ctx = canvas.getContext('2d')!
+
+            // 1. Draw AI-generated background (cover crop)
+            const scale = Math.max(SIZE / img.width, SIZE / img.height)
+            const w = img.width * scale, h = img.height * scale
+            ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h)
+
+            // 2. Dark gradient overlay for text readability
+            const grad = ctx.createLinearGradient(0, 0, 0, SIZE)
+            grad.addColorStop(0,   'rgba(0,0,0,0.15)')
+            grad.addColorStop(0.5, 'rgba(0,0,0,0.35)')
+            grad.addColorStop(1,   'rgba(0,0,0,0.75)')
+            ctx.fillStyle = grad
+            ctx.fillRect(0, 0, SIZE, SIZE)
+
+            // 3. Brand logo mark (orange triangle)
+            ctx.beginPath()
+            ctx.moveTo(36, 36); ctx.lineTo(62, 51); ctx.lineTo(36, 66)
+            ctx.fillStyle = '#f97316'; ctx.fill()
+            ctx.font = 'bold 13px system-ui, sans-serif'
+            ctx.fillStyle = 'white'
+            ctx.letterSpacing = '3px'
+            ctx.fillText('AGENTS PILOT', 72, 56)
+
+            // 4. Hook / title
+            const hook = templateForm.title || ''
+            ctx.font = 'bold 56px system-ui, sans-serif'
+            ctx.fillStyle = 'white'
+            ctx.letterSpacing = '0px'
+            const wrapText = (text: string, x: number, y: number, maxW: number, lineH: number) => {
+              const words = text.split(' ')
+              let line = ''
+              let cy = y
+              for (const word of words) {
+                const test = line + word + ' '
+                if (ctx.measureText(test).width > maxW && line) {
+                  ctx.fillText(line.trim(), x, cy)
+                  line = word + ' '
+                  cy += lineH
+                } else { line = test }
+              }
+              if (line) ctx.fillText(line.trim(), x, cy)
+              return cy
+            }
+            let y = wrapText(hook, 50, SIZE * 0.55, SIZE - 100, 68)
+
+            // 5. CTA line
+            if (templateForm.cta) {
+              y += 32
+              ctx.font = '500 26px system-ui, sans-serif'
+              ctx.fillStyle = '#f97316'
+              ctx.fillText(templateForm.cta, 50, y)
+              y += 36
+            }
+
+            // 6. Short caption (first 100 chars)
+            const cap = (templateForm.caption || templateForm.background || '').slice(0, 100)
+            if (cap) {
+              y += 8
+              ctx.font = '400 20px system-ui, sans-serif'
+              ctx.fillStyle = 'rgba(255,255,255,0.7)'
+              wrapText(cap + (cap.length === 100 ? '…' : ''), 50, y, SIZE - 100, 28)
+            }
+
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Export failed')), 'image/jpeg', 0.92)
+          }
+          img.onerror = () => reject(new Error('Image load failed'))
+          img.src = data.image
+        })
+        const path = `claude-${Date.now()}.jpg`
+        const file = new File([blob], path, { type: 'image/jpeg' })
+        const { data: up, error: upErr } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+        if (upErr || !up) throw new Error(upErr?.message ?? 'Upload failed')
+        publicUrl = supabase.storage.from('post-designs').getPublicUrl(up.path).data.publicUrl
+      } else if (data.svg) {
+        // SVG → canvas → PNG → upload
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          const svgBlob = new Blob([data.svg], { type: 'image/svg+xml;charset=utf-8' })
+          const url = URL.createObjectURL(svgBlob)
+          const img = new window.Image()
+          img.onload = () => {
+            const canvas = document.createElement('canvas')
+            canvas.width = 1200; canvas.height = 628
+            canvas.getContext('2d')!.drawImage(img, 0, 0, 1200, 628)
+            URL.revokeObjectURL(url)
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('Export failed')), 'image/png')
+          }
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG load failed')) }
+          img.src = url
+        })
+        const path = `claude-${Date.now()}.png`
+        const file = new File([blob], path, { type: 'image/png' })
+        const { data: up, error: upErr } = await supabase.storage.from('post-designs').upload(path, file, { upsert: true })
+        if (upErr || !up) throw new Error(upErr?.message ?? 'Upload failed')
+        publicUrl = supabase.storage.from('post-designs').getPublicUrl(up.path).data.publicUrl
+      }
+
+      if (publicUrl) {
+        // Clear design_url so "Edit in Canva" creates a fresh design with the new image
+        setTemplateForm(f => ({ ...f, design_preview_url: publicUrl, design_url: '' }))
+        if (editingTemplate) {
+          await supabase.from('post_templates').update({ design_preview_url: publicUrl, design_url: null }).eq('id', editingTemplate.id)
+          fetchTemplates()
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Claude Design failed')
+    } finally {
+      setTemplateDesignGenerating(null)
+    }
+  }
+
+  async function generateCanvaDesign(targetWin?: Window | null) {
+    setCanvaGenerating(true)
+    setCanvaCandidates([])
+    setError(null)
+    try {
+      // If we already have a generated image, import it into Canva for editing
+      const imageUrl = templateForm.design_preview_url || null
+      const res = await fetch('/api/canva-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ design_type: 'instagram_post', image_url: imageUrl }),
+      })
+      const data = await res.json()
+      if (res.status === 401 && data.error === 'canva_not_connected') {
+        if (targetWin) targetWin.close()
+        window.location.href = '/api/auth/canva'
+        return
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Failed to create design')
+      // Opens directly in Canva — save URL and redirect pre-opened window
+      const editUrl = data.edit_url
+      if (editUrl) {
+        setTemplateForm(f => ({ ...f, design_url: editUrl }))
+        if (editingTemplate) {
+          await supabase.from('post_templates').update({ design_url: editUrl }).eq('id', editingTemplate.id)
+          fetchTemplates()
+        }
+        if (targetWin) {
+          targetWin.location.href = editUrl
+        } else {
+          window.open(editUrl, 'canva')
+        }
+        setSuccess('Canva design created and opened!')
+        setTimeout(() => setSuccess(null), 4000)
+      } else {
+        if (targetWin) targetWin.close()
+        setError('Could not get Canva edit URL')
+      }
+    } catch (err) {
+      if (targetWin) targetWin.close()
+      setError(err instanceof Error ? err.message : 'Canva generation failed')
+    }
+    setCanvaGenerating(false)
+  }
+
+  async function confirmCanvaCandidate(candidate: { candidate_id: string; job_id: string; url: string; thumbnail: string }) {
+    setCanvaConfirming(candidate.candidate_id)
+    try {
+      const res = await fetch('/api/canva-generate', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: candidate.job_id, candidate_id: candidate.candidate_id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to create design')
+      const editUrl = data?.design_summary?.urls?.edit_url ?? candidate.url
+      // Save to template form and DB
+      setTemplateForm(f => ({ ...f, design_url: editUrl, design_preview_url: candidate.thumbnail }))
+      if (editingTemplate) {
+        await supabase.from('post_templates').update({ design_url: editUrl, design_preview_url: candidate.thumbnail }).eq('id', editingTemplate.id)
+        fetchTemplates()
+      }
+      setCanvaCandidates([])
+      setSuccess('Canva design created! Click "Edit in Canva" to open it.')
+      setTimeout(() => setSuccess(null), 4000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to confirm design')
+    }
+    setCanvaConfirming(null)
+  }
+
   async function saveTemplate(e: React.FormEvent) {
     e.preventDefault()
     if (!templateForm.title.trim()) return
     setTemplateSaving(true)
-    const payload = { ...templateForm, updated_at: new Date().toISOString() }
+    const payload: Record<string, unknown> = { ...templateForm, updated_at: new Date().toISOString() }
+    // Never overwrite URL fields with empty string — preserve existing values
+    for (const f of ['design_url','design_preview_url','infographic_url','infographic_preview_url','movie_url','movie_preview_url']) {
+      if (!payload[f]) delete payload[f]
+    }
     if (editingTemplate) {
       await supabase.from('post_templates').update(payload).eq('id', editingTemplate.id)
     } else {
@@ -683,7 +1729,7 @@ export default function SocialPage() {
     setEditingPost(post)
     setForm({
       collateral: post.collateral,
-      platforms: post.platforms.split(', ').map(p => p.trim()),
+      platforms: post.platforms.split(/,\s*/).map(p => p.trim()).filter(Boolean),
       background: post.background,
       media_type: post.media_type,
       cta: post.cta,
@@ -691,6 +1737,8 @@ export default function SocialPage() {
       scheduled_date: post.scheduled_date ?? '',
       status: post.status,
       campaign_id: post.campaign_id ?? '',
+      hook: '',
+      hashtags: '',
       add_to_library: false,
       library_stages: [],
     })
@@ -797,7 +1845,7 @@ export default function SocialPage() {
   return (
     <div>
       <Header
-        title="Social Campaign Manager"
+        title="Post Management"
         subtitle={`${totalPosts} posts · ${scheduledCount} scheduled · ${publishedCount} published`}
       />
 
@@ -806,7 +1854,6 @@ export default function SocialPage() {
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
           🔐 Admin Only
         </span>
-        {/* Platform connection dots */}
         <div className="flex items-center gap-2">
           {[
             { key: 'linkedin',  label: 'in', color: 'bg-blue-600',   ring: 'ring-blue-300',   connectHref: null },
@@ -935,10 +1982,10 @@ export default function SocialPage() {
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Posts', value: totalPosts, color: 'text-sky-600', bg: 'bg-sky-50' },
-            { label: 'Drafts', value: draftCount, color: 'text-slate-600', bg: 'bg-gray-50' },
-            { label: 'Scheduled', value: scheduledCount, color: 'text-amber-600', bg: 'bg-amber-50' },
-            { label: 'Published', value: publishedCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+            { label: 'Total Posts', value: totalPosts,     color: 'text-sky-600',     bg: 'bg-sky-50' },
+            { label: 'Drafts',      value: draftCount,     color: 'text-slate-600',   bg: 'bg-gray-50' },
+            { label: 'Scheduled',   value: scheduledCount, color: 'text-amber-600',   bg: 'bg-amber-50' },
+            { label: 'Published',   value: publishedCount, color: 'text-emerald-600', bg: 'bg-emerald-50' },
           ].map(k => (
             <div key={k.label} className={`rounded-xl border border-gray-200 ${k.bg} p-4`}>
               <p className="text-xs text-slate-500">{k.label}</p>
@@ -979,7 +2026,6 @@ export default function SocialPage() {
                     className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                     <ChevronRight className="h-5 w-5 text-slate-500" />
                   </button>
-
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1044,18 +2090,20 @@ export default function SocialPage() {
 
                   return (
                     <div key={day}
-                      onClick={() => { if (!hasPost) setDayPickerDate(dateStr) }}
-                      className={`border-r border-b ${cellBg} min-h-28 p-2 transition-colors group ${!hasPost ? 'cursor-pointer hover:bg-orange-50/30' : ''}`}>
+                      onClick={() => setDayPickerDate(dateStr)}
+                      className={`border-r border-b ${cellBg} min-h-28 p-2 transition-colors group cursor-pointer hover:bg-orange-50/30`}>
 
                       {/* Day number */}
                       <div className="flex items-start justify-between mb-1.5">
                         <div className={`text-xs font-bold h-5 w-5 flex items-center justify-center rounded-full ${
                           isToday ? 'bg-orange-500 text-white' : hasPost ? 'text-slate-700' : 'text-slate-400'
                         }`}>{day}</div>
-                        {!hasPost && <Plus className="h-3 w-3 text-slate-200 group-hover:text-orange-400 transition-colors" />}
-                        {hasPost && dayPosts.length > 1 && (
-                          <span className="text-xs font-semibold text-slate-500 bg-white/70 rounded px-1">{dayPosts.length}</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {hasPost && dayPosts.length > 1 && (
+                            <span className="text-xs font-semibold text-slate-500 bg-white/70 rounded px-1">{dayPosts.length}</span>
+                          )}
+                          <Plus className="h-3 w-3 text-slate-200 group-hover:text-orange-400 transition-colors" />
+                        </div>
                       </div>
 
                       {/* Posts */}
@@ -1403,8 +2451,8 @@ export default function SocialPage() {
                           <button type="button" onClick={() => openEditTemplate(t)} className="text-slate-400 hover:text-orange-500">
                             <Pencil className="h-3 w-3" />
                           </button>
-                          <button type="button" onClick={() => deleteTemplate(t.id)} className="text-slate-400 hover:text-red-500">
-                            <X className="h-3 w-3" />
+                          <button type="button" onClick={() => { if (confirm(`Delete "${t.title}"?`)) deleteTemplate(t.id) }} className="text-slate-400 hover:text-red-500">
+                            <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
                       ))}
@@ -1426,49 +2474,61 @@ export default function SocialPage() {
                             ? 'border-orange-500/40 bg-orange-50'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                         }`}>
-                        {/* Design thumbnail */}
-                        {tDesign.design_preview_url && (
+                        {/* Design thumbnail — show best available preview */}
+                        {(tDesign.design_preview_url || tDesign.infographic_preview_url || tDesign.movie_preview_url || tDesign.movie_url?.startsWith('upload:')) && (
                           <div className="relative w-full h-28 bg-gray-100 overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={tDesign.design_preview_url} alt={t.collateral} className="w-full h-full object-cover" />
+                            {tDesign.movie_url?.startsWith('upload:') && !tDesign.design_preview_url && !tDesign.infographic_preview_url && !tDesign.movie_preview_url ? (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 gap-1.5">
+                                <Film className="h-7 w-7 text-emerald-400" />
+                                <span className="text-[10px] text-gray-400 font-medium">Uploaded Video</span>
+                              </div>
+                            ) : (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={tDesign.design_preview_url || tDesign.infographic_preview_url || tDesign.movie_preview_url || ''} alt={t.collateral} className="w-full h-full object-cover" />
+                            )}
                             {tDesign.logo_url && (
                               <div className="absolute top-2 left-2 h-7 w-7 rounded bg-white/80 backdrop-blur-sm p-0.5 shadow-sm overflow-hidden">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={tDesign.logo_url} alt="logo" className="h-full w-full object-contain" />
                               </div>
                             )}
-                          </div>
-                        )}
-                        {/* Canva link — always shown if set */}
-                        {tDesign.design_url && (
-                          <div className="px-3 pt-2 pb-0" onClick={e => e.stopPropagation()}>
-                            <a href={tDesign.design_url} target="_blank" rel="noreferrer"
-                              className="text-xs font-medium text-blue-600 flex items-center gap-1 hover:underline">
-                              <ExternalLink className="h-3 w-3" /> Open in Canva
-                            </a>
+                            {/* Media slot badges */}
+                            <div className="absolute bottom-1.5 left-1.5 flex gap-1">
+                              {tDesign.design_url && (
+                                <a href={tDesign.design_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-0.5 bg-[#7c3aed] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow hover:bg-[#6d28d9]">
+                                  <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                  Image
+                                </a>
+                              )}
+                              {tDesign.infographic_url && (
+                                <a href={tDesign.infographic_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-0.5 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow hover:bg-blue-700">
+                                  <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>
+                                  Info
+                                </a>
+                              )}
+                              {tDesign.movie_url && (
+                                <span onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-0.5 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">
+                                  <Film className="h-2 w-2" />
+                                  Movie
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                         <div className="p-3">
                           <div className="flex items-start justify-between gap-1">
                             <p className="text-xs font-semibold text-slate-800 flex-1">{t.collateral}</p>
                             {dbTemplates.find(d => d.title === t.collateral) && (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={e => { e.stopPropagation(); queueCanvaJob(t.collateral) }}
-                                  className="text-xs font-medium text-[#7c3aed] hover:underline flex items-center gap-0.5"
-                                  title="Queue for Canva finalization">
-                                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
-                                  Canva
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={e => { e.stopPropagation(); openEditTemplate(dbTemplates.find(d => d.title === t.collateral)!) }}
-                                  className="shrink-0 text-slate-300 hover:text-orange-500 transition-colors"
-                                  title="Edit template">
-                                  <Pencil className="h-3 w-3" />
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); openEditTemplate(dbTemplates.find(d => d.title === t.collateral)!) }}
+                                className="shrink-0 flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
+                                title="Edit template">
+                                <Pencil className="h-2.5 w-2.5" /> Edit
+                              </button>
                             )}
                           </div>
                           <p className="text-xs text-slate-500 mt-0.5 truncate">{t.platforms}</p>
@@ -1502,20 +2562,95 @@ export default function SocialPage() {
                 </div>
                 <form onSubmit={savePost} data-post-form className="space-y-3">
 
-                  {/* ── Design image ── */}
-                  {selectedDesign?.url && (
-                    <div className="relative w-full h-40 rounded-xl overflow-hidden border border-orange-100 bg-gray-50">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={selectedDesign.url} alt="Design" className="w-full h-full object-cover" />
-                      {selectedDesign.design_url && (
-                        <a href={selectedDesign.design_url} target="_blank" rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="absolute bottom-2 right-2 bg-white/90 rounded px-2 py-1 text-xs font-medium text-blue-600 flex items-center gap-1 shadow-sm hover:bg-white">
-                          <ExternalLink className="h-3 w-3" /> Edit in Canva
-                        </a>
-                      )}
-                    </div>
-                  )}
+                  {/* ── Media slot picker + preview ── */}
+                  {selectedDesign && (selectedDesign.url || selectedDesign.infographic_preview_url || selectedDesign.movie_preview_url || selectedDesign.movie_url) && (() => {
+                    const slots = [
+                      { key: 'image' as const,       label: 'Image',       preview: selectedDesign.url,                      editUrl: selectedDesign.design_url },
+                      { key: 'infographic' as const, label: 'Infographic', preview: selectedDesign.infographic_preview_url,   editUrl: selectedDesign.infographic_url },
+                      { key: 'movie' as const,       label: 'Movie',       preview: selectedDesign.movie_preview_url ?? selectedDesign.movie_url, editUrl: selectedDesign.movie_url },
+                    ].filter(s => s.preview)
+                    const active = slots.find(s => s.key === selectedMediaSlot) ?? slots[0]
+                    return (
+                      <div className="space-y-1.5">
+                        {/* Media type picker — always visible */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold text-slate-400 shrink-0">Publish as:</span>
+                          {slots.map(s => (
+                            <button key={s.key} type="button"
+                              onClick={() => setSelectedMediaSlot(s.key)}
+                              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                                selectedMediaSlot === s.key
+                                  ? s.key === 'movie' ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                                  : s.key === 'infographic' ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                  : 'border-orange-500 bg-orange-50 text-orange-700'
+                                  : 'border-gray-200 text-slate-500 hover:border-gray-300'
+                              }`}>
+                              {s.key === 'movie' && <Film className="h-3 w-3" />}
+                              {s.key === 'image' && <ImageIcon className="h-3 w-3" />}
+                              {s.key === 'infographic' && <LayoutGrid className="h-3 w-3" />}
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                        {/* Preview */}
+                        <div className="relative w-full rounded-xl overflow-hidden border border-orange-100 bg-gray-900" style={{ aspectRatio: active.key === 'movie' ? '16/9' : '1/1' }}>
+                          {active.key === 'movie' ? (() => {
+                            const movieUrl = active.editUrl ?? ''
+                            const isProduct = movieUrl.startsWith('product:')
+                            const isAiMovie = movieUrl.startsWith('ai-movie:')
+                            const isUpload  = movieUrl.startsWith('upload:')
+                            if (isUpload) {
+                              return (
+                                // eslint-disable-next-line jsx-a11y/media-has-caption
+                                <video src={movieUrl.replace('upload:', '')} controls autoPlay loop
+                                  className="w-full h-full object-contain" />
+                              )
+                            }
+                            const screenshotUrls = isProduct ? movieUrl.replace('product:', '').split('|').filter(Boolean) : []
+                            const aiImageUrl = isAiMovie ? movieUrl.replace('ai-movie:', '') : ''
+                            const comp = isProduct ? ProductDemoComposition : isAiMovie ? AiMovieComposition : PostVideoComposition
+                            const props = isProduct
+                              ? { title: form.collateral, caption: form.caption || form.background, platform: form.platforms[0] || 'LinkedIn', screenshotUrls }
+                              : isAiMovie
+                                ? { imageUrl: aiImageUrl, hook: form.hook || extractMovieHook(form.collateral, form.background, form.caption), caption: form.caption || form.background || '', cta: form.cta || '', platform: form.platforms[0] || 'LinkedIn' }
+                                : { title: form.collateral, hook: form.hook || extractMovieHook(form.collateral, form.background, form.caption), caption: form.caption || form.background, platform: form.platforms[0] || 'LinkedIn', hashtags: form.hashtags || extractMovieHashtags(form.collateral, form.caption, form.background), aiPrompt: suggestVisualPrompt(form.collateral, form.caption, form.background) }
+                            const frames = isProduct ? screenshotUrls.length * 80 + 60 : isAiMovie ? AI_MOVIE_FRAMES : 240
+                            return (
+                              <Player
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                component={comp as any}
+                                inputProps={props}
+                                durationInFrames={frames} fps={30} compositionWidth={1200} compositionHeight={628}
+                                style={{ width: '100%' }} controls autoPlay loop
+                              />
+                            )
+                          })() : (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={active.preview!} alt="Design" className="absolute inset-0 w-full h-full object-cover" />
+                              <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.75) 100%)' }} />
+                              <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                                <svg width="16" height="18" viewBox="0 0 16 18"><polygon points="0,0 16,9 0,18" fill="#f97316"/></svg>
+                                <span className="text-white text-[9px] font-bold tracking-widest">AGENTS PILOT</span>
+                              </div>
+                              <div className="absolute bottom-0 left-0 right-0 p-4 space-y-1.5">
+                                {form.hook && <p className="text-white font-bold text-sm leading-tight line-clamp-3">{form.hook}</p>}
+                                {!form.hook && form.collateral && <p className="text-white font-bold text-sm leading-tight">{form.collateral}</p>}
+                                {form.cta && <p className="text-[#f97316] font-semibold text-xs">{form.cta}</p>}
+                                {form.caption && <p className="text-white/70 text-[10px] leading-snug line-clamp-2">{form.caption}</p>}
+                              </div>
+                              {active.editUrl && !active.editUrl.startsWith('remotion:') && !active.editUrl.startsWith('ai-movie:') && (
+                                <a href={active.editUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                                  className="absolute top-3 right-3 bg-[#7c3aed] text-white rounded px-2 py-1 text-[10px] font-bold flex items-center gap-1 shadow hover:bg-[#6d28d9] transition-colors">
+                                  <ExternalLink className="h-2.5 w-2.5" /> Edit in Canva
+                                </a>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   {/* ── Primary fields: Title, Date, Status ── */}
                   <div className="flex flex-col gap-1">
@@ -1644,10 +2779,71 @@ export default function SocialPage() {
                       className={`${inputCls} resize-none`} />
                   </div>
 
+                  {/* Hook */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-slate-500">
+                        Hook <span className="text-slate-400 font-normal">(opening line — stops the scroll)</span>
+                      </label>
+                      <button type="button" onClick={openHookPicker}
+                        className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-600 font-medium">
+                        <BookOpen className="h-3 w-3" />
+                        Pick from library
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={form.hook}
+                      onChange={e => setForm(f => ({ ...f, hook: e.target.value }))}
+                      placeholder="e.g. I lost a $40K deal because I followed up 3 days too late."
+                      className={inputCls}
+                    />
+                    {showHookPicker && (
+                      <div className="rounded-xl border border-indigo-200 bg-white shadow-lg mt-1 overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                          <span className="text-xs font-semibold text-indigo-700">Hooks Library</span>
+                          <button type="button" onClick={() => setShowHookPicker(false)} className="text-slate-400 hover:text-slate-600">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="px-3 py-2 border-b border-gray-100">
+                          <input type="text" value={hookPickerSearch} onChange={e => setHookPickerSearch(e.target.value)}
+                            placeholder="Search hooks…"
+                            className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        </div>
+                        <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
+                          {hookPickerLoading ? (
+                            <div className="flex items-center justify-center py-6 text-slate-400 gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                            </div>
+                          ) : hookPickerItems.filter(h => !hookPickerSearch || h.text.toLowerCase().includes(hookPickerSearch.toLowerCase())).length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-6">No hooks found</p>
+                          ) : hookPickerItems
+                              .filter(h => !hookPickerSearch || h.text.toLowerCase().includes(hookPickerSearch.toLowerCase()))
+                              .map(h => (
+                                <button key={h.id} type="button"
+                                  onClick={() => { setForm(f => ({ ...f, hook: h.text })); setShowHookPicker(false); setHookPickerSearch('') }}
+                                  className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 transition-colors">
+                                  <p className="text-xs text-slate-800 leading-relaxed">{h.text}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-indigo-500 font-medium">{h.category}</span>
+                                    <span className="text-slate-300">·</span>
+                                    <span className="text-xs text-slate-400">{h.platform}</span>
+                                    <span className="text-slate-300">·</span>
+                                    <span className="text-xs text-amber-500">★ {h.avg_score}</span>
+                                  </div>
+                                </button>
+                              ))
+                          }
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Caption */}
                   <div className={`flex flex-col gap-1 rounded-lg p-1 -mx-1 ${templateFields.has('caption') ? 'bg-orange-50' : ''}`}>
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-slate-500">Post Caption <span className="text-red-500">*</span></label>
+                      <label className="text-xs font-medium text-slate-500">Post Body <span className="text-red-500">*</span></label>
                       <button type="button" onClick={() => setUseAI(v => !v)}
                         className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600">
                         <Sparkles className="h-3 w-3" />
@@ -1680,6 +2876,37 @@ export default function SocialPage() {
                       placeholder="Write or generate caption…"
                       className={`${inputCls} resize-none font-mono text-xs`} />
                     <p className="text-xs text-slate-400">{form.caption.length} chars</p>
+                  </div>
+
+                  {/* ── Hashtags ──────────────────────────────────────── */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-slate-500">Hashtags</label>
+                      <button type="button"
+                        onClick={() => setForm(f => ({ ...f, hashtags: suggestHashtags(f.collateral, f.caption, f.platforms) }))}
+                        className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600">
+                        <Hash className="h-3 w-3" />
+                        Suggest
+                      </button>
+                    </div>
+                    <input
+                      value={form.hashtags}
+                      onChange={e => setForm(f => ({ ...f, hashtags: e.target.value }))}
+                      placeholder="#realestate #realtor #proptech"
+                      className={inputCls} />
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(HASHTAG_GROUPS).map(([label, tags]) => (
+                        <button key={label} type="button"
+                          onClick={() => setForm(f => {
+                            const existing = new Set(f.hashtags.split(/\s+/).filter(Boolean))
+                            tags.forEach(t => existing.add(t))
+                            return { ...f, hashtags: [...existing].join(' ') }
+                          })}
+                          className="px-2 py-1 text-xs rounded-full border border-slate-200 text-slate-500 hover:border-orange-300 hover:text-orange-600 hover:bg-orange-50 transition-all">
+                          + {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* ── Add to Nurture Library ─────────────────────────── */}
@@ -1751,7 +2978,10 @@ export default function SocialPage() {
         {/* ── POST TRACKER TAB ─────────────────────────────────────────────── */}
         {activeTab === 'tracker' && (
           <div className="py-2">
-            <PostTrackerTable showHeader={false} />
+            <PostTrackerTable showHeader={false} onEditPost={async (postId) => {
+              const { data } = await supabase.from('social_posts').select('*').eq('id', postId).single()
+              if (data) startEdit(data)
+            }} />
           </div>
         )}
 
@@ -1823,26 +3053,66 @@ export default function SocialPage() {
               <button onClick={() => setShowPostPreview(false)}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
-              <div className={`grid gap-5 ${selectedDesign?.url ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {(() => {
+                const movieUrl = selectedDesign?.movie_url ?? ''
+                const isMovieSlot = selectedMediaSlot === 'movie'
+                const isProduct  = movieUrl.startsWith('product:')
+                const isAiMovie  = movieUrl.startsWith('ai-movie:')
+                const isUpload   = movieUrl.startsWith('upload:')
+                const isRemotion = movieUrl.startsWith('remotion:')
+                const screenshotUrls = isProduct ? movieUrl.replace('product:', '').split('|').filter(Boolean) : []
+                const aiImageUrl = isAiMovie ? movieUrl.replace('ai-movie:', '') : ''
+                const uploadVideoUrl = isUpload ? movieUrl.replace('upload:', '') : ''
+
+                const previewUrl = selectedMediaSlot === 'infographic' ? selectedDesign?.infographic_preview_url
+                  : isMovieSlot ? null   // movie uses player, not img
+                  : selectedDesign?.url
+                const editUrl = selectedMediaSlot === 'infographic' ? selectedDesign?.infographic_url
+                  : isMovieSlot ? (isRemotion || isAiMovie || isProduct || isUpload ? null : movieUrl)
+                  : selectedDesign?.design_url
+
+                const hasMedia = previewUrl || isMovieSlot
+                return (
+              <div className={`grid gap-5 ${hasMedia ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 {/* Design side */}
-                {selectedDesign?.url && (
+                {hasMedia && (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Design</p>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Design · {selectedMediaSlot}</p>
                     <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={selectedDesign.url} alt="Post design" className="w-full object-cover" />
+                      {isMovieSlot ? (
+                        isUpload ? (
+                          // eslint-disable-next-line jsx-a11y/media-has-caption
+                          <video src={uploadVideoUrl} controls autoPlay className="w-full" />
+                        ) : (
+                          <Player
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            component={(isProduct ? ProductDemoComposition : isAiMovie ? AiMovieComposition : PostVideoComposition) as any}
+                            inputProps={
+                              isProduct ? { title: form.collateral, caption: form.caption || form.background, platform: form.platforms[0] || 'LinkedIn', screenshotUrls }
+                              : isAiMovie ? { imageUrl: aiImageUrl, hook: form.hook || extractMovieHook(form.collateral, form.background, form.caption), caption: form.caption || form.background || '', cta: form.cta || '', platform: form.platforms[0] || 'LinkedIn' }
+                              : { title: form.collateral, hook: form.hook || extractMovieHook(form.collateral, form.background, form.caption), caption: form.caption || form.background || '', platform: form.platforms[0] || 'LinkedIn', hashtags: form.hashtags || extractMovieHashtags(form.collateral, form.caption, form.background), aiPrompt: suggestVisualPrompt(form.collateral, form.caption, form.background) }
+                            }
+                            durationInFrames={isProduct ? screenshotUrls.length * 80 + 60 : isAiMovie ? AI_MOVIE_FRAMES : 240}
+                            fps={30} compositionWidth={1200} compositionHeight={628}
+                            style={{ width: '100%' }} controls autoPlay loop
+                          />
+                        )
+                      ) : (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={previewUrl!} alt="Post design" className="w-full object-cover" />
+                      )}
                     </div>
-                    {selectedDesign.design_url && (
-                      <a href={selectedDesign.design_url} target="_blank" rel="noreferrer"
+                    {editUrl && !isMovieSlot && (
+                      <a href={editUrl} target="_blank" rel="noreferrer"
                         className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline font-medium">
-                        <ExternalLink className="h-3 w-3" /> Open in Canva / Figma
+                        <ExternalLink className="h-3 w-3" /> Edit in Canva
                       </a>
                     )}
                   </div>
                 )}
                 {/* Caption side */}
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Caption</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Post Details</p>
                   {form.collateral && (
                     <p className="text-sm font-semibold text-slate-800">{form.collateral}</p>
                   )}
@@ -1856,14 +3126,34 @@ export default function SocialPage() {
                   {form.media_type && (
                     <p className="text-xs text-slate-500">📎 {form.media_type}</p>
                   )}
+                  {form.hook && (
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-orange-600 mb-1">Hook</p>
+                      <p className="text-sm text-orange-800 whitespace-pre-wrap leading-relaxed">{form.hook}</p>
+                    </div>
+                  )}
                   <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                    <p className="text-xs font-semibold text-slate-400 mb-2">Caption</p>
                     <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{form.caption || '(no caption yet)'}</p>
                   </div>
+                  {form.hashtags && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-blue-500 mb-1">Hashtags</p>
+                      <p className="text-sm text-blue-700 font-mono">{form.hashtags}</p>
+                    </div>
+                  )}
+                  {form.cta && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-emerald-600 mb-1">CTA</p>
+                      <p className="text-sm text-emerald-800">{form.cta}</p>
+                    </div>
+                  )}
                   {form.scheduled_date && (
                     <p className="text-xs text-slate-500">📅 Scheduled: {form.scheduled_date}</p>
                   )}
                 </div>
               </div>
+                )})()}
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
               <button onClick={() => setShowPostPreview(false)}
@@ -1887,7 +3177,7 @@ export default function SocialPage() {
               <h3 className="text-sm font-semibold text-slate-900">
                 {editingTemplate ? 'Edit Template' : 'New Template'}
               </h3>
-              <button onClick={() => setShowTemplateForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
+              <button type="button" onClick={() => setShowTemplateForm(false)}><X className="h-4 w-4 text-slate-400" /></button>
             </div>
             <form onSubmit={saveTemplate} className="p-6 space-y-3 overflow-y-auto flex-1">
               <div className="flex flex-col gap-1">
@@ -1972,100 +3262,446 @@ export default function SocialPage() {
                   </div>
                 </div>
 
-                {/* AI Prompt */}
+                {/* AI Visual Prompt */}
                 <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-500">AI Image Prompt</label>
-                    {templateForm.design_prompt && (
-                      <button type="button" onClick={() => navigator.clipboard.writeText(buildEnrichedPrompt())}
-                        className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
-                        <Copy className="h-3 w-3" /> Copy full prompt
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-orange-400" />
+                      AI Visual Prompt
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button type="button"
+                        onClick={() => setTemplateForm(f => ({ ...f, design_prompt: suggestVisualPrompt(f.title, f.caption, f.background) }))}
+                        className="text-xs text-violet-500 hover:text-violet-600 flex items-center gap-1 px-2 py-0.5 rounded-md border border-violet-200 hover:bg-violet-50 transition-colors">
+                        <RefreshCw className="h-3 w-3" /> Suggest
                       </button>
+                      {templateForm.design_prompt && (
+                        <button type="button" onClick={() => navigator.clipboard.writeText(buildEnrichedPrompt())}
+                          className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                          <Copy className="h-3 w-3" /> Copy
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <textarea rows={4} value={templateForm.design_prompt}
+                    onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
+                    placeholder="Describe the visual concept: mood, color palette, composition, style. E.g. 'Cinematic chaos — tangled cables and broken gears on deep crimson background, dramatic lighting. Overwhelm and frustration.'"
+                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-slate-400 flex-1">Drives image palette, movie atmosphere, and infographic colors. Each template can have its own visual world.</p>
+                    {templateForm.design_prompt && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">
+                        {parsePalette(templateForm.design_prompt) === SVG_PALETTES.crimson ? '🔴 Crimson'
+                          : parsePalette(templateForm.design_prompt) === SVG_PALETTES.electric ? '🔵 Electric'
+                          : parsePalette(templateForm.design_prompt) === SVG_PALETTES.emerald ? '🟢 Emerald'
+                          : parsePalette(templateForm.design_prompt) === SVG_PALETTES.premium ? '🟣 Premium'
+                          : parsePalette(templateForm.design_prompt) === SVG_PALETTES.warm ? '🟡 Warm'
+                          : parsePalette(templateForm.design_prompt) === SVG_PALETTES.slate ? '⚪ Slate'
+                          : '🟠 Brand'}
+                      </span>
                     )}
                   </div>
-                  <textarea rows={3} value={templateForm.design_prompt}
-                    onChange={e => setTemplateForm(f => ({ ...f, design_prompt: e.target.value }))}
-                    placeholder="Describe the image you want Claude or another AI to generate for this template…"
-                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-600 leading-relaxed" />
-                  <p className="text-xs text-slate-400">Clicking a button copies the full prompt to clipboard and opens the design tool. Paste the prompt to start designing.</p>
                 </div>
 
-                {/* Preview */}
-                {templateForm.design_preview_url && (
-                  <div className="relative rounded-lg overflow-hidden border border-gray-200 h-32">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={templateForm.design_preview_url} alt="Design preview" className="w-full h-full object-cover" />
-                    <button type="button" onClick={() => setTemplateForm(f => ({ ...f, design_preview_url: '' }))}
-                      className="absolute top-1.5 right-1.5 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
-                      <X className="h-3.5 w-3.5 text-slate-500" />
-                    </button>
+                {/* ── Media slots ── */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-500">Media</label>
+
+                  {/* Tab selector */}
+                  <div className="flex gap-1.5">
+                    {([
+                      { key: 'image' as const,       label: 'Image',       dot: templateForm.design_preview_url },
+                      { key: 'infographic' as const, label: 'Infographic', dot: templateForm.infographic_preview_url },
+                      { key: 'movie' as const,       label: 'Movie',       dot: templateForm.movie_preview_url },
+                    ]).map(tab => (
+                      <button key={tab.key} type="button"
+                        onClick={() => setDesignTab(d => d === tab.key ? null : tab.key)}
+                        className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                          designTab === tab.key
+                            ? 'border-orange-500 bg-orange-50 text-orange-700'
+                            : 'border-gray-200 text-slate-500 hover:border-gray-300 hover:text-slate-700'
+                        }`}>
+                        {tab.label}
+                        {tab.dot && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                      </button>
+                    ))}
                   </div>
-                )}
 
-                {/* Design tool buttons */}
-                {/* Generate with Flux (free, fully automated) */}
-                <button type="button" onClick={generateWithFlux} disabled={fluxGenerating}
-                  className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-lg transition-colors ${
-                    fluxGenerating
-                      ? 'bg-orange-100 text-orange-400 cursor-not-allowed'
-                      : 'bg-orange-500 text-white hover:bg-orange-600'
-                  }`}>
-                  {fluxGenerating
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating image…</>
-                    : <><Sparkles className="h-4 w-4" /> Generate with Flux (free)</>
-                  }
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Canva AI */}
-                  <button type="button" onClick={() => {
-                    navigator.clipboard.writeText(buildEnrichedPrompt())
-                    window.open('https://www.canva.com/apps/text-to-image', 'canva-ai')
-                  }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#7c3aed] text-[#7c3aed] hover:bg-[#7c3aed]/5 transition-colors">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
-                    Canva AI
-                  </button>
-                  {/* Claude Design */}
-                  <button type="button" onClick={() => {
-                    navigator.clipboard.writeText(buildEnrichedPrompt())
-                    window.open('https://claude.ai/design/p/57c00f4a-b6b8-4232-8631-bc8507cc3840?file=AgentsPilot+Social+Post.html', 'claude-design')
-                  }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg border-2 border-[#d97706] text-[#d97706] hover:bg-[#d97706]/5 transition-colors">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="#d97706" strokeWidth="2"><polygon points="4,2 20,12 4,22"/></svg>
-                    Claude Design
-                  </button>
-                </div>
+                  {/* ── Image slot ── */}
+                  {designTab === 'image' && (
+                    <div className="flex gap-3 p-3 rounded-xl border border-orange-100 bg-orange-50">
+                      {/* Thumbnail */}
+                      <div className="relative w-28 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 flex items-center justify-center">
+                        {templateForm.design_preview_url ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={templateForm.design_preview_url} alt="preview" className="w-full h-full object-cover" />
+                            <button type="button" onClick={() => setTemplateForm(f => ({ ...f, design_preview_url: '', design_url: '' }))}
+                              className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
+                              <X className="h-3 w-3 text-slate-500" />
+                            </button>
+                            {templateForm.design_url && (
+                              <a href={templateForm.design_url} target="_blank" rel="noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="absolute bottom-1 left-1 bg-[#7c3aed] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">
+                                Edit in Canva
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">No image</span>
+                        )}
+                      </div>
 
-                {/* Upload or URL */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Or upload / paste URL</label>
-                  <div className="flex gap-2">
-                    <label className={`flex items-center gap-2 px-3 py-2 text-xs border border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 ${designUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                      {designUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-400" /> : <Upload className="h-3.5 w-3.5 text-slate-400" />}
-                      <span className="text-slate-500">{designUploading ? 'Uploading…' : 'Upload image'}</span>
-                      <input type="file" accept="image/*" className="hidden"
-                        onChange={async e => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          const url = await uploadDesignImage(file)
-                          if (url) setTemplateForm(f => ({ ...f, design_preview_url: url }))
-                        }} />
-                    </label>
-                    <span className="text-xs text-slate-400 self-center">or</span>
-                    <input value={templateForm.design_preview_url}
-                      onChange={e => setTemplateForm(f => ({ ...f, design_preview_url: e.target.value }))}
-                      placeholder="https://… image URL"
-                      className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" />
-                  </div>
-                </div>
+                      {/* Controls */}
+                      <div className="flex-1 grid grid-cols-2 gap-1.5">
+                        <button type="button"
+                          onClick={async () => {
+                            if (!editingTemplate) return
+                            setTemplateDesignGenerating('post')
+                            const query = [templateForm.title, templateForm.background, templateForm.cta, templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background)].filter(Boolean).join('. ')
+                            const res = await fetch('/api/canva-queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template_id: editingTemplate.id, title: templateForm.title, query }) })
+                            const d = await res.json()
+                            if (d.job_id) { setSuccess('Queued — type "canva" in Claude Code'); setTimeout(() => setSuccess(null), 8000) }
+                            else setError(d.error ?? 'Failed')
+                            setTemplateDesignGenerating(null)
+                          }}
+                          disabled={templateDesignGenerating === 'post' || !editingTemplate}
+                          className="flex items-center gap-1 px-2 py-2 rounded-lg border border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 text-xs font-semibold transition-colors">
+                          {templateDesignGenerating === 'post' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Claude Image
+                        </button>
 
-                {/* Canva / Figma link */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-500">Canva / Figma link <span className="text-slate-400">(optional)</span></label>
-                  <input value={templateForm.design_url}
-                    onChange={e => setTemplateForm(f => ({ ...f, design_url: e.target.value }))}
-                    placeholder="https://www.canva.com/design/…"
-                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                        <button type="button"
+                          onClick={() => {
+                            const prompt = templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background)
+                            setClaudeDesignPrompt([templateForm.title && `Title: ${templateForm.title}`, templateForm.cta && `CTA: ${templateForm.cta}`, templateForm.caption && `Caption: ${templateForm.caption}`, prompt && `Visual prompt: ${prompt}`].filter(Boolean).join('\n\n'))
+                          }}
+                          className="flex items-center gap-1 px-2 py-2 rounded-lg border border-violet-400 text-violet-700 bg-violet-50 hover:bg-violet-100 text-xs font-semibold transition-colors">
+                          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+                          Claude Design
+                        </button>
+
+                        <button type="button" onClick={generateWithFlux} disabled={fluxGenerating}
+                          className="flex items-center gap-1 px-2 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 text-xs font-semibold transition-colors">
+                          {fluxGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          Flux AI
+                        </button>
+
+                        <label className={`flex items-center gap-1 px-2 py-2 rounded-lg border border-gray-300 text-slate-600 bg-white hover:bg-gray-50 cursor-pointer text-xs font-semibold transition-colors ${designUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {designUploading ? <Loader2 className="h-3 w-3 animate-spin text-orange-400" /> : <Upload className="h-3 w-3" />}
+                          Upload
+                          <input type="file" accept="image/*" className="hidden"
+                            onChange={async e => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              const url = await uploadDesignImage(file)
+                              if (url) setTemplateForm(f => ({ ...f, design_preview_url: url, design_url: '' }))
+                            }} />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Claude Design prompt panel */}
+                  {designTab === 'image' && claudeDesignPrompt && (
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
+                      <p className="text-[10px] font-semibold text-violet-700 uppercase tracking-wide">Copy → paste into Claude.ai</p>
+                      <pre className="text-xs text-violet-900 whitespace-pre-wrap leading-relaxed font-sans">{claudeDesignPrompt}</pre>
+                      <div className="flex gap-2">
+                        <button type="button"
+                          onClick={() => { navigator.clipboard?.writeText(claudeDesignPrompt); setSuccess('Copied!'); setTimeout(() => setSuccess(null), 2000) }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition-colors">
+                          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                          Copy
+                        </button>
+                        <a href="https://claude.ai/design/p/57c00f4a-b6b8-4232-8631-bc8507cc3840?file=AgentsPilot+Social+Post.html"
+                          target="_blank" rel="noreferrer"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded border border-violet-400 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors">
+                          Open Claude Design →
+                        </a>
+                        <button type="button" onClick={() => setClaudeDesignPrompt(null)} className="ml-auto text-violet-400 hover:text-violet-600">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Infographic slot ── */}
+                  {designTab === 'infographic' && (
+                    <div className="flex gap-3 p-3 rounded-xl border border-blue-100 bg-blue-50">
+                      {/* Thumbnail */}
+                      <div className="relative w-28 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 flex items-center justify-center">
+                        {templateForm.infographic_preview_url ? (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={templateForm.infographic_preview_url} alt="infographic preview" className="w-full h-full object-cover" />
+                            <button type="button" onClick={() => setTemplateForm(f => ({ ...f, infographic_preview_url: '', infographic_url: '' }))}
+                              className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
+                              <X className="h-3 w-3 text-slate-500" />
+                            </button>
+                            {templateForm.infographic_url && (
+                              <a href={templateForm.infographic_url} target="_blank" rel="noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="absolute bottom-1 left-1 bg-[#7c3aed] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">
+                                Edit in Canva
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 text-center px-1">No infographic</span>
+                        )}
+                      </div>
+
+                      {/* Controls */}
+                      <div className="flex-1 space-y-2">
+                        <input
+                          type="url"
+                          placeholder="Paste Canva template URL…"
+                          value={canvaTemplateUrl}
+                          onChange={e => setCanvaTemplateUrl(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                        <button type="button"
+                          disabled={!canvaTemplateUrl.trim() || !editingTemplate || infographicQueuing}
+                          onClick={async () => {
+                            if (!editingTemplate || !canvaTemplateUrl.trim()) return
+                            setInfographicQueuing(true)
+                            try {
+                              const res = await fetch('/api/canva-queue', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ template_id: editingTemplate.id, title: templateForm.title, query: [templateForm.title, templateForm.background, templateForm.cta, templateForm.caption].filter(Boolean).join('. '), design_type: 'infographic', canva_template_url: canvaTemplateUrl.trim() }),
+                              })
+                              const d = await res.json()
+                              if (d.job_id) { setSuccess('Queued — type "infographic" in Claude Code'); setCanvaTemplateUrl('') }
+                            } finally { setInfographicQueuing(false) }
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                          {infographicQueuing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                          Queue infographic
+                        </button>
+                        <p className="text-[10px] text-blue-400">Then type <code className="font-mono">infographic</code> in Claude Code</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Movie slot ── */}
+                  {designTab === 'movie' && (
+                    <div className="space-y-3 p-3 rounded-xl border border-emerald-100 bg-emerald-50">
+
+                      {/* Mode selector */}
+                      <div className="flex gap-1.5">
+                        {([
+                          { key: 'basic' as const,   label: '⚡ Basic',        desc: 'Animated text & brand' },
+                          { key: 'ai' as const,      label: '🎬 AI Movie',     desc: 'People & scenes' },
+                          { key: 'product' as const, label: '📱 Product Demo', desc: 'Screenshot animation' },
+                          { key: 'upload' as const,  label: '⬆️ Upload',       desc: 'Loom / screen rec' },
+                        ]).map(m => (
+                          <button key={m.key} type="button"
+                            onClick={() => setMovieMode(m.key)}
+                            className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-2 rounded-lg border text-xs font-semibold transition-all ${
+                              movieMode === m.key
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                : 'bg-white text-slate-600 border-gray-200 hover:border-emerald-300'
+                            }`}>
+                            <span>{m.label}</span>
+                            <span className={`text-[9px] font-normal ${movieMode === m.key ? 'text-emerald-100' : 'text-slate-400'}`}>{m.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Thumbnail strip */}
+                      {templateForm.movie_preview_url && (
+                        <div className="relative w-full h-20 rounded-lg overflow-hidden bg-gray-900">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={templateForm.movie_preview_url} alt="movie preview" className="w-full h-full object-cover" />
+                          <button type="button"
+                            onClick={() => setTemplateForm(f => ({ ...f, movie_preview_url: '', movie_url: '' }))}
+                            className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
+                            <X className="h-3 w-3 text-slate-500" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── Basic mode ── */}
+                      {movieMode === 'basic' && (
+                        <div className="space-y-2">
+                          {/* Editable text fields */}
+                          <div className="space-y-1.5 p-2.5 rounded-lg bg-white border border-gray-200">
+                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Customize text</p>
+                            <input
+                              value={movieEditHook || extractMovieHook(templateForm.title, templateForm.background, templateForm.caption)}
+                              onChange={e => setMovieEditHook(e.target.value)}
+                              placeholder="Hook / headline…"
+                              className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                            />
+                            <textarea
+                              rows={2}
+                              value={movieEditCaption || templateForm.caption || templateForm.background}
+                              onChange={e => setMovieEditCaption(e.target.value)}
+                              placeholder="Caption / body text…"
+                              className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400 resize-none"
+                            />
+                          </div>
+                          <div className="rounded-lg overflow-hidden bg-black">
+                            <Player
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              component={PostVideoComposition as any}
+                              inputProps={{
+                                title: templateForm.title,
+                                hook: movieEditHook || extractMovieHook(templateForm.title, templateForm.background, templateForm.caption),
+                                caption: movieEditCaption || templateForm.caption || templateForm.background || '',
+                                platform: templateForm.platforms?.split(',')[0]?.trim() || 'LinkedIn',
+                                hashtags: extractMovieHashtags(templateForm.title, templateForm.caption, templateForm.background),
+                                aiPrompt: templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background),
+                              }}
+                              durationInFrames={240} fps={30} compositionWidth={1200} compositionHeight={628}
+                              style={{ width: '100%' }} controls autoPlay loop
+                            />
+                          </div>
+                          <button type="button" disabled={!editingTemplate || movieGenerating} onClick={generateMovie}
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+                            {movieGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Film className="h-3 w-3" />}
+                            {movieGenerating ? 'Generating…' : 'Save Basic Movie'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── AI Movie mode ── */}
+                      {movieMode === 'ai' && (
+                        <div className="space-y-2">
+                          {/* Existing ai-movie preview */}
+                          {templateForm.movie_url?.startsWith('ai-movie:') && (
+                            <Player
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              component={AiMovieComposition as any}
+                              inputProps={{
+                                imageUrl: templateForm.movie_url.replace('ai-movie:', ''),
+                                hook: movieEditHook || extractMovieHook(templateForm.title, templateForm.background, templateForm.caption),
+                                caption: movieEditCaption || templateForm.caption || templateForm.background || '',
+                                cta: templateForm.cta || '',
+                                platform: templateForm.platforms?.split(',')[0]?.trim() || 'LinkedIn',
+                              }}
+                              durationInFrames={AI_MOVIE_FRAMES} fps={30} compositionWidth={1200} compositionHeight={628}
+                              style={{ width: '100%' }} controls autoPlay loop
+                            />
+                          )}
+                          <div className="rounded-xl bg-white border border-gray-200 p-3 space-y-2">
+                            <p className="text-xs font-semibold text-slate-700">AI-animated movie — free, instant</p>
+                            <p className="text-[10px] text-slate-500">Generates an AI image from your visual prompt, then animates it with Ken Burns + cinematic text overlays. No video credits needed.</p>
+                            <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                              <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Visual prompt</p>
+                              <p className="text-[10px] text-slate-600 font-mono line-clamp-2">{(templateForm.design_prompt || suggestVisualPrompt(templateForm.title, templateForm.caption, templateForm.background)).slice(0, 180)}</p>
+                            </div>
+                          </div>
+                          <button type="button" disabled={!editingTemplate || aiMovieGenerating} onClick={generateAiMovie}
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors">
+                            {aiMovieGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                            {aiMovieGenerating ? 'Generating image…' : templateForm.movie_url?.startsWith('ai-movie:') ? 'Regenerate AI Movie' : 'Generate AI Movie'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── Product Demo mode ── */}
+                      {movieMode === 'product' && (
+                        <div className="space-y-2">
+                          {/* Screenshot grid — up to 3 slots */}
+                          <div className="grid grid-cols-3 gap-2">
+                            {[0, 1, 2].map(i => (
+                              <div key={i} className="relative aspect-video rounded-lg overflow-hidden border bg-gray-100">
+                                {productScreenshots[i] ? (
+                                  <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={productScreenshots[i]} alt={`screen ${i+1}`} className="w-full h-full object-cover" />
+                                    <button type="button"
+                                      onClick={() => setProductScreenshots(prev => prev.filter((_, idx) => idx !== i))}
+                                      className="absolute top-0.5 right-0.5 bg-white rounded-full p-0.5 shadow hover:bg-red-50">
+                                      <X className="h-2.5 w-2.5 text-slate-500" />
+                                    </button>
+                                    <span className="absolute bottom-0.5 left-0.5 bg-black/60 text-white text-[9px] font-bold px-1 rounded">{i + 1}</span>
+                                  </>
+                                ) : (
+                                  <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-orange-50 transition-colors border-2 border-dashed border-orange-200 rounded-lg">
+                                    {productScreenshotUploading && i === productScreenshots.length ? (
+                                      <Loader2 className="h-4 w-4 text-orange-400 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Upload className="h-3.5 w-3.5 text-orange-300" />
+                                        <span className="text-[9px] text-orange-400 mt-0.5">Screen {i + 1}</span>
+                                      </>
+                                    )}
+                                    <input type="file" accept="image/*" className="hidden"
+                                      disabled={productScreenshots.length !== i}
+                                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadProductScreenshot(f) }} />
+                                  </label>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-orange-500 text-center">Add up to 3 screens — each gets its own animated scene</p>
+
+                          {/* Live preview */}
+                          {productScreenshots.length > 0 && (
+                            <div className="rounded-lg overflow-hidden bg-black">
+                              <Player
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                component={ProductDemoComposition as any}
+                                inputProps={{ title: templateForm.title, caption: templateForm.caption || templateForm.background || '', platform: templateForm.platforms?.split(',')[0]?.trim() || 'LinkedIn', screenshotUrls: productScreenshots }}
+                                durationInFrames={productScreenshots.length * 80 + 60} fps={30} compositionWidth={1200} compositionHeight={628}
+                                style={{ width: '100%' }} controls autoPlay loop
+                              />
+                            </div>
+                          )}
+
+                          <button type="button"
+                            disabled={!editingTemplate || productScreenshots.length === 0 || movieGenerating}
+                            onClick={generateProductMovie}
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors">
+                            {movieGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Film className="h-3 w-3" />}
+                            {movieGenerating ? 'Saving…' : `Save Product Demo${productScreenshots.length > 1 ? ` (${productScreenshots.length} screens)` : ''}`}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ── Upload mode ── */}
+                      {movieMode === 'upload' && (
+                        <div className="space-y-2">
+                          {/* Preview existing upload */}
+                          {templateForm.movie_url?.startsWith('upload:') && (
+                            <div className="rounded-xl overflow-hidden bg-black border border-gray-200">
+                              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                              <video
+                                src={templateForm.movie_url.replace('upload:', '')}
+                                controls className="w-full" style={{ maxHeight: 200 }}
+                              />
+                            </div>
+                          )}
+                          <label className={`w-full flex flex-col items-center justify-center gap-2 px-4 py-8 rounded-xl border-2 border-dashed transition-colors cursor-pointer ${movieUploading ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 hover:border-emerald-300 hover:bg-emerald-50'}`}>
+                            {movieUploading ? (
+                              <>
+                                <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                                <span className="text-xs font-semibold text-emerald-600">Uploading…</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-6 w-6 text-gray-400" />
+                                <span className="text-xs font-semibold text-slate-600">
+                                  {templateForm.movie_url?.startsWith('upload:') ? 'Replace video' : 'Upload video'}
+                                </span>
+                                <span className="text-[10px] text-slate-400">MP4, MOV, WebM — Loom exports, screen recordings, etc.</span>
+                              </>
+                            )}
+                            <input
+                              type="file" accept="video/mp4,video/quicktime,video/webm,video/*"
+                              className="hidden" disabled={movieUploading}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadMovie(f) }}
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2150,6 +3786,50 @@ export default function SocialPage() {
                 onClick={() => setShowCanvaPicker(false)}
                 className="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5 border border-gray-200 rounded-lg">
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Movie Preview Modal ──────────────────────────────────────────────── */}
+      {movieTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111] rounded-2xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden flex flex-col border border-[#222]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#222]">
+              <div className="flex items-center gap-2">
+                <Film className="h-4 w-4 text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">Post Movie Preview</h3>
+                <span className="text-xs text-zinc-500">— {movieTemplate.collateral}</span>
+              </div>
+              <button onClick={() => setMovieTemplate(null)}><X className="h-4 w-4 text-zinc-400" /></button>
+            </div>
+            <div className="p-4 bg-black">
+              <Player
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                component={PostVideoComposition as any}
+                inputProps={{
+                  title:    movieTemplate.collateral,
+                  hook:     form.hook || '',
+                  caption:  movieTemplate.caption,
+                  platform: movieTemplate.platforms.split(',')[0].trim(),
+                  hashtags: form.hashtags || '',
+                }}
+                durationInFrames={240}
+                fps={30}
+                compositionWidth={1200}
+                compositionHeight={628}
+                style={{ width: '100%', borderRadius: 8 }}
+                controls
+                autoPlay
+                loop
+              />
+            </div>
+            <div className="px-6 py-3 border-t border-[#222] flex items-center justify-between">
+              <p className="text-xs text-zinc-500">8 seconds · 30fps · 1200×628 — use hook + hashtags from the Create form</p>
+              <button onClick={() => setMovieTemplate(null)}
+                className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                Done
               </button>
             </div>
           </div>

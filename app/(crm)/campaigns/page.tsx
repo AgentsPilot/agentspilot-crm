@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import Badge from '@/components/ui/Badge'
 import { supabase } from '@/lib/supabase'
-import { Plus, X, Loader2, Megaphone, TrendingUp, DollarSign, Users, Pencil, Eye, Copy, Check, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, X, Loader2, Megaphone, TrendingUp, DollarSign, Users, Pencil, Eye, Copy, Check, FileText, ChevronDown, ChevronUp, PenSquare } from 'lucide-react'
 
 type SocialPost = {
   id: string
@@ -103,12 +103,16 @@ export default function CampaignsPage() {
     setLoading(true)
     const [{ data: camps, error: campErr }, { data: contacts }, { data: socialPosts }] = await Promise.all([
       supabase.from('campaigns').select('*').order('created_at', { ascending: false }),
-      supabase.from('contacts_current').select('company,stage,state'),
+      supabase.from('contacts_current').select('company,stage,state,utm_source,utm_campaign'),
       supabase.from('social_posts').select('id, campaign_id, collateral, platforms, status, scheduled_date'),
     ])
     if (campErr) { setLoading(false); return }
     const enriched = (camps ?? []).map(c => {
-      const campLeads = (contacts ?? []).filter((u: { company: string | null; stage: string }) => u.company === c.name)
+      const campLeads = (contacts ?? []).filter((u: { company: string | null; stage: string; utm_source: string | null; utm_campaign: string | null }) => {
+        if (c.utm_campaign && u.utm_campaign) return u.utm_campaign === c.utm_campaign
+        if (c.utm_source   && u.utm_source)   return u.utm_source   === c.utm_source
+        return u.company === c.name
+      })
       const leads     = campLeads.length
       const converted = campLeads.filter((u: { stage: string }) => u.stage === 'customer_paid').length
       const cr          = leads > 0 ? Math.round((converted / leads) * 100 * 10) / 10 : 0
@@ -538,6 +542,9 @@ export default function CampaignsPage() {
                           <button onClick={() => copyUrl(c)} className="text-slate-400 hover:text-emerald-600 transition-colors" title="Copy UTM link">
                             {copiedId === c.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                           </button>
+                          <a href={`/social?tab=create&campaign_id=${c.id}`} className="text-slate-400 hover:text-orange-500 transition-colors" title="New post for this campaign">
+                            <PenSquare className="h-4 w-4" />
+                          </a>
                           <button onClick={() => deleteCampaign(c.id)} className="text-slate-400 hover:text-red-600 transition-colors" title="Delete">
                             <X className="h-4 w-4" />
                           </button>

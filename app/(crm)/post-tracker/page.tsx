@@ -36,7 +36,7 @@ const statusIcon: Record<string, React.ReactNode> = {
 }
 
 // ── Shared Post Tracker Table (used in standalone page + social tab) ─────────
-export function PostTrackerTable({ showHeader = true }: { showHeader?: boolean }) {
+export function PostTrackerTable({ showHeader = true, onEditPost }: { showHeader?: boolean; onEditPost?: (postId: string) => void }) {
   const [posts, setPosts]           = useState<TrackerPost[]>([])
   const [campaigns, setCampaigns]   = useState<Campaign[]>([])
   const [loading, setLoading]       = useState(true)
@@ -167,10 +167,21 @@ export function PostTrackerTable({ showHeader = true }: { showHeader?: boolean }
                           <p className="text-xs text-slate-400 truncate max-w-48 mt-0.5">{post.caption}</p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">
-                        {camp ? (
-                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{camp.name}</span>
-                        ) : '—'}
+                      <td className="px-4 py-3 text-xs">
+                        <select
+                          value={post.campaign_id ?? ''}
+                          onChange={async e => {
+                            const val = e.target.value || null
+                            await supabase.from('social_posts').update({ campaign_id: val }).eq('id', post.id)
+                            fetchData()
+                          }}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500 max-w-36"
+                        >
+                          <option value="">— No campaign —</option>
+                          {campaigns.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-600 max-w-32 truncate">{post.platforms}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{post.media_type || '—'}</td>
@@ -191,13 +202,23 @@ export function PostTrackerTable({ showHeader = true }: { showHeader?: boolean }
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Link href="/social?tab=create" title="Edit in Social Manager"
-                            className="text-slate-400 hover:text-orange-500 transition-colors">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Link>
-                          <span className={`flex items-center gap-1 text-xs ${statusStyle[post.status]} px-1.5 py-0.5 rounded`}>
-                            {statusIcon[post.status]}
-                          </span>
+                          {post.status !== 'published' ? (
+                            onEditPost ? (
+                              <button onClick={() => onEditPost(post.id)} title="Edit post"
+                                className="text-slate-400 hover:text-orange-500 transition-colors">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            ) : (
+                              <Link href={`/social?tab=create&post_id=${post.id}`} title="Edit post"
+                                className="text-slate-400 hover:text-orange-500 transition-colors">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Link>
+                            )
+                          ) : (
+                            <span className="text-slate-200" title="Published posts cannot be edited">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>
