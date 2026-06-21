@@ -797,6 +797,9 @@ export default function SocialPage() {
       scheduled_date: form.scheduled_date || null,
       status: form.status,
       campaign_id: form.campaign_id || null,
+      design_preview_url: selectedDesign?.url ?? null,
+      infographic_preview_url: selectedDesign?.infographic_preview_url ?? null,
+      movie_url: selectedDesign?.movie_url ?? null,
     }
     const { error } = editingPost
       ? await supabase.from('social_posts').update(payload).eq('id', editingPost.id)
@@ -1302,7 +1305,7 @@ export default function SocialPage() {
       const movieUrl = `remotion:${editingTemplate.id}`
       setTemplateForm(f => ({ ...f, movie_preview_url: publicUrl, movie_url: movieUrl }))
       await supabase.from('post_templates').update({ movie_preview_url: publicUrl, movie_url: movieUrl }).eq('id', editingTemplate.id)
-      if (editingTemplate.collateral === selectedTemplate) {
+      if (editingTemplate.title === selectedTemplate) {
         setSelectedDesign(d => d ? { ...d, movie_preview_url: publicUrl, movie_url: movieUrl } : d)
         setSelectedMediaSlot('movie')
       }
@@ -1365,7 +1368,7 @@ export default function SocialPage() {
       const movieUrl = `product:${productScreenshots.join('|')}`
       setTemplateForm(f => ({ ...f, movie_preview_url: publicUrl, movie_url: movieUrl }))
       await supabase.from('post_templates').update({ movie_preview_url: publicUrl, movie_url: movieUrl }).eq('id', editingTemplate.id)
-      if (editingTemplate.collateral === selectedTemplate) {
+      if (editingTemplate.title === selectedTemplate) {
         setSelectedDesign(d => d ? { ...d, movie_preview_url: publicUrl, movie_url: movieUrl } : d)
         setSelectedMediaSlot('movie')
       }
@@ -1434,7 +1437,7 @@ export default function SocialPage() {
       await supabase.from('post_templates')
         .update({ movie_url: movieUrl, movie_preview_url: publicUrl })
         .eq('id', editingTemplate.id)
-      if (editingTemplate.collateral === selectedTemplate) {
+      if (editingTemplate.title === selectedTemplate) {
         setSelectedDesign(d => d ? { ...d, movie_preview_url: publicUrl, movie_url: movieUrl } : d)
         setSelectedMediaSlot('movie')
       }
@@ -1466,7 +1469,7 @@ export default function SocialPage() {
       await supabase.from('post_templates')
         .update({ movie_url: movieUrl })
         .eq('id', editingTemplate.id)
-      if (editingTemplate.collateral === selectedTemplate) {
+      if (editingTemplate.title === selectedTemplate) {
         setSelectedDesign(d => d ? { ...d, movie_url: movieUrl } : d)
         setSelectedMediaSlot('movie')
       }
@@ -1756,15 +1759,19 @@ export default function SocialPage() {
 
   async function quickSchedule(template: typeof FALLBACK_TEMPLATES[0] | null, date: string) {
     setDayPickerSaving(true)
-    const payload = template ? {
-      collateral:     template.collateral,
-      platforms:      template.platforms,
-      background:     template.background,
-      media_type:     template.media_type,
-      cta:            template.cta,
-      caption:        template.caption,
-      scheduled_date: date,
-      status:         'scheduled' as const,
+    const t = template as ActiveTemplate | null
+    const payload = t ? {
+      collateral:              t.collateral,
+      platforms:               t.platforms,
+      background:              t.background,
+      media_type:              t.media_type,
+      cta:                     t.cta,
+      caption:                 t.caption,
+      scheduled_date:          date,
+      status:                  'scheduled' as const,
+      design_preview_url:      t.design_preview_url ?? null,
+      infographic_preview_url: t.infographic_preview_url ?? null,
+      movie_url:               t.movie_url ?? null,
     } : {
       collateral:     'New Post',
       platforms:      '',
@@ -3848,6 +3855,20 @@ export default function SocialPage() {
               <button onClick={() => setShowLinkedInManual(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
+            </div>
+
+            {/* Primary: OAuth flow */}
+            <button
+              onClick={() => { window.location.href = '/api/auth/linkedin' }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">
+              <div className="h-5 w-5 rounded bg-white flex items-center justify-center text-blue-600 text-xs font-bold">in</div>
+              Connect with LinkedIn (OAuth)
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex-1 border-t border-gray-200" />
+              <span className="text-xs text-slate-400">or paste token manually</span>
+              <div className="flex-1 border-t border-gray-200" />
             </div>
 
             <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 mb-4 text-xs text-blue-700 space-y-1">

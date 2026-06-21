@@ -36,34 +36,28 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // ── Resolve member URN via /v2/me ─────────────────────────────────────────
-  // w_member_social is enough to call /v2/me and get the numeric member id.
+  // ── Resolve member URN via /v2/userinfo (requires openid scope) ──────────
   let platformUserId: string | null = null
   let platformUsername = 'LinkedIn'
 
   try {
-    const meRes = await fetch('https://api.linkedin.com/v2/me', {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-        'X-Restli-Protocol-Version': '2.0.0',
-      },
+    const uiRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
     })
-    console.log('LinkedIn /v2/me status:', meRes.status)
-    if (meRes.ok) {
-      const me = await meRes.json()
-      console.log('LinkedIn /v2/me body:', JSON.stringify(me))
-      if (me.id) {
-        platformUserId = `urn:li:person:${me.id}`
-        const first = me.localizedFirstName ?? ''
-        const last  = me.localizedLastName  ?? ''
-        platformUsername = `${first} ${last}`.trim() || 'LinkedIn'
+    console.log('LinkedIn /v2/userinfo status:', uiRes.status)
+    if (uiRes.ok) {
+      const ui = await uiRes.json()
+      console.log('LinkedIn /v2/userinfo body:', JSON.stringify(ui))
+      if (ui.sub) {
+        platformUserId   = `urn:li:person:${ui.sub}`
+        platformUsername = (ui.name ?? [ui.given_name, ui.family_name].filter(Boolean).join(' ')) || 'LinkedIn'
       }
     } else {
-      const body = await meRes.text()
-      console.warn('LinkedIn /v2/me error body:', body)
+      const body = await uiRes.text()
+      console.warn('LinkedIn /v2/userinfo error body:', body)
     }
   } catch (err) {
-    console.error('Failed to fetch LinkedIn /v2/me:', err)
+    console.error('Failed to fetch LinkedIn /v2/userinfo:', err)
   }
 
   // ── Persist connection ─────────────────────────────────────────────────────

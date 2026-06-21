@@ -38,29 +38,57 @@ export async function POST(req: NextRequest) {
     const conn = await getConn('linkedin')
     if (!conn) {
       results.LinkedIn = { success: false, message: 'Not connected' }
-    } else if (!conn.platform_user_id) {
-      results.LinkedIn = {
-        success: false,
-        message: 'Member URN not found — disconnect and reconnect LinkedIn',
-      }
     } else {
+      // Resolve member URN on-the-fly if missing (saves back to DB for future use)
+      if (!conn.platform_user_id) {
+        try {
+          const uiRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+            headers: { Authorization: `Bearer ${conn.access_token}` },
+          })
+          if (uiRes.ok) {
+            const ui = await uiRes.json()
+            if (ui.sub) {
+              conn.platform_user_id = `urn:li:person:${ui.sub}`
+              await supabase.from('social_connections').update({ platform_user_id: conn.platform_user_id }).eq('platform', 'linkedin')
+            }
+          }
+        } catch { /* continue without URN — will fail at post step with a clear error */ }
+      }
+      if (!conn.platform_user_id) {
+        results.LinkedIn = { success: false, message: 'Could not resolve your LinkedIn member ID — please reconnect' }
+      } else {
       try {
-        const isOrg = conn.platform_user_id?.startsWith('urn:li:organization:')
+        // ── Resolve media URL (image takes priority over video) ───────────────
+        const imageUrl: string | null = post.design_preview_url ?? post.infographic_preview_url ?? null
+        const videoUrl: string | null = !imageUrl ? resolveVideoUrl(post.movie_url) : null
+
+        // ── Upload image asset to LinkedIn if we have one ─────────────────────
+        let mediaAssetUrn: string | null = null
+        let mediaCategory: 'NONE' | 'IMAGE' | 'VIDEO' = 'NONE'
+
+        if (imageUrl) {
+          mediaAssetUrn = await uploadLinkedInImage(imageUrl, conn.access_token, conn.platform_user_id)
+          if (mediaAssetUrn) mediaCategory = 'IMAGE'
+        } else if (videoUrl) {
+          mediaAssetUrn = await uploadLinkedInVideo(videoUrl, conn.access_token, conn.platform_user_id)
+          if (mediaAssetUrn) mediaCategory = 'VIDEO'
+        }
+
+        const shareMedia = mediaAssetUrn
+          ? [{ status: 'READY', media: mediaAssetUrn, ...(mediaCategory === 'IMAGE' ? { description: { text: '' }, title: { text: '' } } : {}) }]
+          : undefined
+
         const body = {
           author: conn.platform_user_id,
           lifecycleState: 'PUBLISHED',
           specificContent: {
             'com.linkedin.ugc.ShareContent': {
               shareCommentary: { text: post.caption },
-              shareMediaCategory: 'NONE',
+              shareMediaCategory: mediaCategory,
+              ...(shareMedia ? { media: shareMedia } : {}),
             },
           },
-          visibility: {
-            ...(isOrg
-              ? { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-              : { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-            ),
-          },
+          visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
         }
         const res = await fetch('https://api.linkedin.com/v2/ugcPosts', {
           method: 'POST',
@@ -72,7 +100,7 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify(body),
         })
         if (res.ok || res.status === 201) {
-          results.LinkedIn = { success: true, message: 'Published!' }
+          results.LinkedIn = { success: true, message: mediaCategory !== 'NONE' ? 'Published with media!' : 'Published!' }
         } else {
           const err = await res.json().catch(() => ({}))
           results.LinkedIn = { success: false, message: err.message ?? `Error ${res.status}` }
@@ -80,8 +108,82 @@ export async function POST(req: NextRequest) {
       } catch (err: unknown) {
         results.LinkedIn = { success: false, message: err instanceof Error ? err.message : 'Unknown error' }
       }
+      }
     }
   }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function resolveVideoUrl(movieUrl: string | null): string | null {
+  if (!movieUrl) return null
+  if (movieUrl.startsWith('upload:')) return movieUrl.slice(7)
+  if (movieUrl.startsWith('ai-movie:')) return movieUrl.slice(9)
+  return null  // remotion: and product: can't produce a downloadable URL
+}
+
+async function uploadLinkedInImage(imageUrl: string, token: string, ownerUrn: string): Promise<string | null> {
+  try {
+    const regRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0' },
+      body: JSON.stringify({
+        registerUploadRequest: {
+          recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+          owner: ownerUrn,
+          serviceRelationships: [{ relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }],
+        },
+      }),
+    })
+    if (!regRes.ok) return null
+    const reg = await regRes.json()
+    const uploadUrl = reg.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl
+    const assetUrn = reg.value?.asset
+    if (!uploadUrl || !assetUrn) return null
+
+    const imgRes = await fetch(imageUrl)
+    if (!imgRes.ok) return null
+    const imgBuffer = await imgRes.arrayBuffer()
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': imgRes.headers.get('content-type') ?? 'image/jpeg' },
+      body: imgBuffer,
+    })
+    return uploadRes.ok || uploadRes.status === 201 ? assetUrn : null
+  } catch { return null }
+}
+
+async function uploadLinkedInVideo(videoUrl: string, token: string, ownerUrn: string): Promise<string | null> {
+  try {
+    const regRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0' },
+      body: JSON.stringify({
+        registerUploadRequest: {
+          recipes: ['urn:li:digitalmediaRecipe:feedshare-video'],
+          owner: ownerUrn,
+          serviceRelationships: [{ relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }],
+        },
+      }),
+    })
+    if (!regRes.ok) return null
+    const reg = await regRes.json()
+    const uploadUrl = reg.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl
+    const assetUrn = reg.value?.asset
+    if (!uploadUrl || !assetUrn) return null
+
+    const vidRes = await fetch(videoUrl)
+    if (!vidRes.ok) return null
+    const vidBuffer = await vidRes.arrayBuffer()
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'video/mp4' },
+      body: vidBuffer,
+    })
+    return uploadRes.ok || uploadRes.status === 201 ? assetUrn : null
+  } catch { return null }
+}
 
   // ── Facebook ──────────────────────────────────────────────────────────────
   if (platforms.includes('Facebook')) {

@@ -42,6 +42,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Fallback: /v2/me (works with w_member_social, no openid needed) ─────────
+  const meRes = await fetch('https://api.linkedin.com/v2/me', {
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+      'X-Restli-Protocol-Version': '2.0.0',
+    },
+  })
+  if (meRes.ok) {
+    const me = await meRes.json()
+    if (me.id) {
+      const first = me.localizedFirstName ?? ''
+      const last  = me.localizedLastName  ?? ''
+      return NextResponse.json({ memberId: me.id, name: `${first} ${last}`.trim() || 'LinkedIn' })
+    }
+  }
+
   // ── Last resort: ask user to enter member ID manually ─────────────────────
   return NextResponse.json(
     { error: 'MANUAL_ID_REQUIRED' },
