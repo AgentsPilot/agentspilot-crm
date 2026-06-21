@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
 
   const platforms = post.platforms.split(',').map((p: string) => p.trim())
   const results: Record<string, { success: boolean; message: string }> = {}
+  const platformPostIds: Record<string, string> = {}
 
   // ── Helper: fetch a stored connection ─────────────────────────────────────
   async function getConn(platform: string) {
@@ -100,6 +101,8 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify(body),
         })
         if (res.ok || res.status === 201) {
+          const liPostId = res.headers.get('x-restli-id') ?? res.headers.get('location') ?? null
+          if (liPostId) platformPostIds.LinkedIn = liPostId
           results.LinkedIn = { success: true, message: mediaCategory !== 'NONE' ? 'Published with media!' : 'Published!' }
         } else {
           const err = await res.json().catch(() => ({}))
@@ -381,6 +384,7 @@ async function uploadLinkedInVideo(videoUrl: string, token: string, ownerUrn: st
   const anySuccess = Object.values(results).some(r => r.success)
   await supabase.from('social_posts').update({
     publish_results: results,
+    ...(Object.keys(platformPostIds).length ? { platform_post_ids: platformPostIds } : {}),
     ...(anySuccess ? { status: 'published', published_at: new Date().toISOString() } : {}),
   }).eq('id', post_id)
 

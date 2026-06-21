@@ -19,6 +19,8 @@ export type TrackerPost = {
   media_type: string
   caption: string
   publish_results: Record<string, { success: boolean; message: string }> | null
+  analytics: Record<string, { likes: number; comments: number; shares: number }> | null
+  analytics_updated_at: string | null
 }
 
 type Campaign = { id: string; name: string }
@@ -214,6 +216,15 @@ export function PostTrackerTable({ showHeader = true, onEditPost }: { showHeader
                                   <span key={platform} title={r.message}
                                     className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${r.success ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
                                     {r.success ? '✓' : '✗'} {platform}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {post.analytics && (
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {Object.entries(post.analytics).map(([platform, s]) => (
+                                  <span key={platform} className="text-[10px] text-slate-400">
+                                    {platform}: 👍 {s.likes} 💬 {s.comments} 🔁 {s.shares}
                                   </span>
                                 ))}
                               </div>
