@@ -2485,10 +2485,14 @@ export default function SocialPage() {
                         {(tDesign.design_preview_url || tDesign.infographic_preview_url || tDesign.movie_preview_url || tDesign.movie_url?.startsWith('upload:')) && (
                           <div className="relative w-full h-28 bg-gray-100 overflow-hidden">
                             {tDesign.movie_url?.startsWith('upload:') && !tDesign.design_preview_url && !tDesign.infographic_preview_url && !tDesign.movie_preview_url ? (
-                              <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 gap-1.5">
-                                <Film className="h-7 w-7 text-emerald-400" />
-                                <span className="text-[10px] text-gray-400 font-medium">Uploaded Video</span>
-                              </div>
+                              <video
+                                src={tDesign.movie_url.replace('upload:', '')}
+                                className="w-full h-full object-cover"
+                                preload="metadata"
+                                muted
+                                playsInline
+                                onLoadedMetadata={e => { (e.target as HTMLVideoElement).currentTime = 0.5 }}
+                              />
                             ) : (
                               /* eslint-disable-next-line @next/next/no-img-element */
                               <img src={tDesign.design_preview_url || tDesign.infographic_preview_url || tDesign.movie_preview_url || ''} alt={t.collateral} className="w-full h-full object-cover" />

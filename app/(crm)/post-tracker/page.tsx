@@ -14,9 +14,11 @@ export type TrackerPost = {
   platforms: string
   status: 'draft' | 'scheduled' | 'published'
   scheduled_date: string | null
+  published_at: string | null
   campaign_id: string | null
   media_type: string
   caption: string
+  publish_results: Record<string, { success: boolean; message: string }> | null
 }
 
 type Campaign = { id: string; name: string }
@@ -145,7 +147,7 @@ export function PostTrackerTable({ showHeader = true, onEditPost }: { showHeader
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['Post Title', 'Campaign', 'Platforms', 'Type', 'Scheduled', 'Status', 'Actions'].map(h => (
+                  {['Post Title', 'Campaign', 'Platforms', 'Type', 'Scheduled', 'Status', 'Published', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -153,7 +155,7 @@ export function PostTrackerTable({ showHeader = true, onEditPost }: { showHeader
               <tbody className="divide-y divide-gray-100">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-slate-400 text-sm">
+                    <td colSpan={8} className="px-4 py-12 text-center text-slate-400 text-sm">
                       No posts match your filters
                     </td>
                   </tr>
@@ -199,6 +201,27 @@ export function PostTrackerTable({ showHeader = true, onEditPost }: { showHeader
                             <option key={s} value={s}>{s}</option>
                           ))}
                         </select>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {post.published_at ? (
+                          <div className="space-y-1">
+                            <p className="text-slate-400 whitespace-nowrap">
+                              {new Date(post.published_at).toLocaleDateString()} {new Date(post.published_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {post.publish_results && (
+                              <div className="flex flex-wrap gap-1">
+                                {Object.entries(post.publish_results).map(([platform, r]) => (
+                                  <span key={platform} title={r.message}
+                                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${r.success ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                                    {r.success ? '✓' : '✗'} {platform}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

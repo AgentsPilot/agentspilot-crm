@@ -377,11 +377,12 @@ async function uploadLinkedInVideo(videoUrl: string, token: string, ownerUrn: st
     }
   }
 
-  // ── Update post status if any platform succeeded ──────────────────────────
+  // ── Save results back to the post ────────────────────────────────────────
   const anySuccess = Object.values(results).some(r => r.success)
-  if (anySuccess) {
-    await supabase.from('social_posts').update({ status: 'published' }).eq('id', post_id)
-  }
+  await supabase.from('social_posts').update({
+    publish_results: results,
+    ...(anySuccess ? { status: 'published', published_at: new Date().toISOString() } : {}),
+  }).eq('id', post_id)
 
   return NextResponse.json({ results })
 }
